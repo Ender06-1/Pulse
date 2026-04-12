@@ -1,0 +1,5 @@
+Program <- INTEGER eof
+
+eof <- !.
+
+INTEGER <- [0-9]+

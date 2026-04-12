@@ -17,7 +17,12 @@
           ocaml
           ocaml-lsp
           ocamlformat
+          findlib
           dune_3
+
+          ppx_deriving
+
+          fasm
         ];
     };
 
