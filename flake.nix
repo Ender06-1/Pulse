@@ -30,6 +30,10 @@
       pname = "pulse";
       version = "0.1.0";
 
+      buildInputs = with pkgs.ocamlPackages; [
+        ppx_deriving
+      ];
+
       src = ./.;
     });
   };
