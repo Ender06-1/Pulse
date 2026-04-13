@@ -1,4 +1,3 @@
 # Pulse
 
 Simple programming language.
-

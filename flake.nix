@@ -23,6 +23,8 @@
           ppx_deriving
 
           fasm
+
+          self.packages.${system}.pulse
         ];
     };
 
@@ -32,6 +34,10 @@
 
       buildInputs = with pkgs.ocamlPackages; [
         ppx_deriving
+      ];
+
+      nativeBuildInputs = with pkgs; [
+        fasm
       ];
 
       src = ./.;
