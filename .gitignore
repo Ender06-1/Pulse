@@ -1,6 +1,2 @@
 .direnv/
 _build/
-
-main.asm
-main.pulse
-main
