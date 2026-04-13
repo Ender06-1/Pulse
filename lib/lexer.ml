@@ -16,12 +16,10 @@ and advance (lexer : t) : char option * t =
     (Some c, lexer)
 
 and lex_integer (lexer : t) : Token.t * t =
-  let rec aux lexer acc =
-    match advance lexer with
-    | Some '0' .. '9', lexer -> aux lexer (acc + 1)
-    | _ -> lexer
+  let rec aux lexer =
+    match advance lexer with Some '0' .. '9', lexer -> aux lexer | _ -> lexer
   in
-  let end_lexer = aux lexer 0 in
+  let end_lexer = aux lexer in
   let i = String.sub lexer.src lexer.pos (end_lexer.pos - lexer.pos) in
   (Token.make Token.INTEGER i lexer.line lexer.col, end_lexer)
 
