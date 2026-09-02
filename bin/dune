@@ -1,0 +1,4 @@
+(executable
+ (public_name pulse)
+ (name main)
+ (libraries pulse))

@@ -7,6 +7,11 @@
   let
     system = "x86_64-linux";
     pkgs = import nixpkgs { inherit system; };
+    ocaml-pkgs = with pkgs.ocamlPackages; [
+      ocaml
+      ocaml-lsp
+      ocamlformat
+    ];
   in
   {
     devShells.${system}.default = pkgs.mkShell {
@@ -18,7 +23,9 @@
         nasm
         clang-tools
         gdb
-      ];
+
+        dune
+      ] ++ ocaml-pkgs;
     };
   };
 }
