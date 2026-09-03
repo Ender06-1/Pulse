@@ -1,3 +1,5 @@
+let ( let* ) = Result.bind
+
 let prologue =
   {|
 global _start
@@ -94,7 +96,67 @@ let insts_of_ast (tree : ast) : instruction list =
   | Add v :: tl -> Mov v :: tl
   | _ -> failwith "unreachable"
 
+type token_type = Int of string | PlusSign | EOF
+type lexer = { input : string; pos : int }
+
+let rec next (lexer : lexer) : (token_type * lexer, string) result =
+  let rec lex_int lexer acc =
+    match String.get lexer.input lexer.pos with
+    | '0' .. '9' as c ->
+        lex_int
+          { lexer with pos = lexer.pos + 1 }
+          (String.make 1 c |> String.cat acc)
+    | _ -> (Int acc, lexer)
+  in
+  if lexer.pos >= String.length lexer.input then Ok (EOF, lexer)
+  else
+    match String.get lexer.input lexer.pos with
+    | '0' .. '9' -> Ok (lex_int lexer "")
+    | '+' -> Ok (PlusSign, { lexer with pos = lexer.pos + 1 })
+    | ' ' | '\n' -> next { lexer with pos = lexer.pos + 1 }
+    | _ -> Error "invalid character"
+
+(* Grammar *)
+(* program = add_expr EOF ;*)
+(* add_expr = prim_expr ( "+" add_expr )* ; *)
+(* prim_expr = num *)
+
+let rec parse_program (lexer : lexer) : (ast * lexer, string) result =
+  let* expr, lexer = parse_add_expr lexer in
+  let* tt, lexer = next lexer in
+  match tt with EOF -> Ok (expr, lexer) | _ -> Error "expected EOF"
+
+and parse_add_expr (lexer : lexer) : (ast * lexer, string) result =
+  let* prim, lexer = parse_prim_expr lexer in
+  let* tt, lexer = next lexer in
+  match tt with
+  | PlusSign ->
+      let* exp, lexer = parse_add_expr lexer in
+      Ok (Plus (prim, exp), lexer)
+  | _ -> Ok (prim, lexer)
+
+and parse_prim_expr (lexer : lexer) : (ast * lexer, string) result =
+  let* tt, lexer = next lexer in
+  match tt with
+  | Int n -> Ok (Num (Int64.of_string n), lexer)
+  | _ -> Error "expected num"
+
 let () =
-  let tree = Plus (Plus (Num 34L, Num 35L), Num 36L) in
-  Out_channel.with_open_text "main.pulse.asm" (fun c ->
-      Out_channel.output_string c (insts_of_ast tree |> codegen))
+  let input =
+    In_channel.with_open_text (Array.get Sys.argv 1) In_channel.input_all
+  in
+  let lexer = { input; pos = 0 } in
+  let ret_code =
+    Result.fold
+      ~ok:(fun (tree, _) ->
+        Out_channel.with_open_text "main.pulse.asm" (fun c ->
+            Out_channel.output_string c (insts_of_ast tree |> codegen));
+        let ret_code = Sys.command "nasm -felf64 main.pulse.asm" in
+        if ret_code <> 0 then ret_code
+        else Sys.command "ld main.pulse.o -o main.pulse.exe")
+      ~error:(fun e ->
+        print_endline e;
+        1)
+      (parse_program lexer)
+  in
+  exit ret_code
