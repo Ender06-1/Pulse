@@ -66,25 +66,36 @@ and epilogue = {|
   syscall
 |}
 
-type instruction = Mov of int64 | Add of int64
+type value = Reg of string | Val of string
 
-let rec insts_of_ast (tree : Ast.t) : instruction list =
-  let rec aux (tree : Ast.t) =
-    match tree with
-    | IntNum v -> [ Add v ]
-    | BinExpr (op, l, r) -> List.append (aux l) (aux r)
-  in
-  match aux tree with Add v :: tl -> Mov v :: tl | _ -> failwith "unreachable"
+type instruction =
+  | Mov of value * value
+  (* Operations *)
+  | Add of value * value
+  | Sub of value * value
 
-and codegen (insts : instruction list) : string =
-  let string_of_inst inst =
-    match inst with
-    | Mov v -> Printf.sprintf "mov rdi, %Lu" v
-    | Add v -> Printf.sprintf "add rdi, %Lu" v
+let rec codegen (ir : Ir.instruction list) : instruction list =
+  let value_of_ir (v : Ir.value) : value =
+    match v with Var v -> Reg v | Integer i -> Val (Int64.to_string i)
   in
-  let first =
-    List.map string_of_inst insts
-    |> List.map (String.cat "  ")
-    |> String.concat "\n" |> String.cat prologue
+  let aux (i : Ir.instruction) : instruction list =
+    match i with
+    | Copy (var, v) -> [ Mov (Reg var, value_of_ir v) ]
+    | Add (var, l, r) ->
+        [ Mov (Reg var, value_of_ir r); Add (Reg var, value_of_ir l) ]
+    | Sub (var, l, r) ->
+        [ Mov (Reg var, value_of_ir r); Sub (Reg var, value_of_ir l) ]
   in
-  String.cat first epilogue
+  List.map aux ir |> List.concat
+
+and string_of_value (v : value) : string =
+  match v with Reg r -> r | Val v -> v
+
+and string_of_instruction (i : instruction) : string =
+  match i with
+  | Mov (vl, vr) ->
+      Printf.sprintf "mov %s, %s" (string_of_value vl) (string_of_value vr)
+  | Add (vl, vr) ->
+      Printf.sprintf "add %s, %s" (string_of_value vl) (string_of_value vr)
+  | Sub (vl, vr) ->
+      Printf.sprintf "sub %s, %s" (string_of_value vl) (string_of_value vr)

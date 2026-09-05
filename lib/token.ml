@@ -1,1 +1,8 @@
-type typ = IntNum of string | Plus | EOF
+type typ =
+  (* Constants *)
+  | Integer of string
+  (* Operators *)
+  | Plus
+  | Minus
+  (* Misc *)
+  | EOF

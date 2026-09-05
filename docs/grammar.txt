@@ -1,0 +1,11 @@
+program =
+  | add_expr EOF
+  ;
+
+add_expr =
+  | prim_expr ( ( "+" | "-" ) prim_expr )*
+  ;
+
+prim_expr =
+  | integer
+  ;
