@@ -129,14 +129,14 @@ and inst_selection (ir : Ir.instruction list) (g : var_generator) :
       instruction list * var_generator =
     match i with
     | Print v -> ([ Mov (Reg Rdi, value_of_ir v); Call "dump" ], g)
-    | Add (var, l, r) ->
-        let var = VReg var in
+    | Add (tmp, l, r) ->
+        let var = VReg tmp in
         ([ Mov (var, value_of_ir l); Add (var, value_of_ir r) ], g)
-    | Sub (var, l, r) ->
-        let var = VReg var in
+    | Sub (tmp, l, r) ->
+        let var = VReg tmp in
         ([ Mov (var, value_of_ir l); Sub (var, value_of_ir r) ], g)
-    | Mul (var, l, r) ->
-        let var = VReg var in
+    | Mul (tmp, l, r) ->
+        let var = VReg tmp in
         let rvalue = value_of_ir r in
         let mul_insts =
           if is_imm rvalue then
@@ -147,8 +147,8 @@ and inst_selection (ir : Ir.instruction list) (g : var_generator) :
         in
         ( [ Mov (Reg Rax, value_of_ir l) ] @ mul_insts @ [ Mov (var, Reg Rax) ],
           g )
-    | Div (var, l, r) ->
-        let var = VReg var in
+    | Div (tmp, l, r) ->
+        let var = VReg tmp in
         let rvalue = value_of_ir r in
         let div_insts =
           if is_imm rvalue then
@@ -161,8 +161,8 @@ and inst_selection (ir : Ir.instruction list) (g : var_generator) :
           @ div_insts
           @ [ Mov (var, Reg Rax) ],
           g )
-    | Mod (var, l, r) ->
-        let var = VReg var in
+    | Mod (tmp, l, r) ->
+        let var = VReg tmp in
         let rvalue = value_of_ir r in
         let mod_insts =
           if is_imm rvalue then
@@ -175,6 +175,7 @@ and inst_selection (ir : Ir.instruction list) (g : var_generator) :
           @ mod_insts
           @ [ Mov (var, Reg Rdx) ],
           g )
+    | Copy (tmp, exp) -> ([ Mov (VReg tmp, value_of_ir exp) ], g)
   in
   let rec aux ir g acc =
     match ir with

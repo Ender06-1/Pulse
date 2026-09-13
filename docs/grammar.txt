@@ -1,9 +1,18 @@
 program =
-  | print_stmt* EOF
+  | stmt* EOF
+  ;
+
+stmt =
+  | print_stmt
+  | var_stmt
   ;
 
 print_stmt =
   | "print" expr ";"
+  ;
+
+var_stmt =
+  | "var" ident "=" expr ";"
   ;
 
 expr =
@@ -20,4 +29,5 @@ mul_expr =
 
 prim_expr =
   | integer
+  | ident
   ;

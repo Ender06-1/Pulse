@@ -11,6 +11,7 @@
       ocaml
       ocaml-lsp
       ocamlformat
+      utop
     ];
   in
   {
