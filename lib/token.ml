@@ -17,7 +17,22 @@ type typ =
   (* Misc *)
   | EOF
 
-let to_keyword (s : string) =
+let string_of_typ t =
+  match t with
+  | Integer i -> "integer " ^ i
+  | Ident i -> "ident " ^ i
+  | Print -> "print"
+  | Var -> "var"
+  | Plus -> "plus"
+  | Minus -> "minus"
+  | Mul -> "mul"
+  | Div -> "div"
+  | Mod -> "mod"
+  | Eq -> "equal"
+  | SemiColon -> "semicolon"
+  | EOF -> "EOF"
+
+and to_keyword (s : string) =
   match s with "print" -> Some Print | "var" -> Some Var | _ -> None
 
 and equal (t1 : typ) (t2 : typ) : bool =
@@ -40,14 +55,3 @@ and equal (t1 : typ) (t2 : typ) : bool =
   (* Misc *)
   | EOF, EOF -> true
   | _ -> false
-
-and string_of_typ t =
-  match t with
-  | Integer i -> i
-  | Ident i -> i
-  | Print -> "print"
-  | Var -> "var"
-  | Plus | Minus | Mul | Div | Mod -> "operator"
-  | Eq -> "="
-  | SemiColon -> ";"
-  | EOF -> "end of file"

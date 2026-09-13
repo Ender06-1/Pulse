@@ -1,22 +1,78 @@
+open Pulse
+
+type arguments = {
+  dump_tokens : bool;
+  dump_ast : bool;
+  dump_ir : bool;
+  source_path : string;
+}
+
 let ( let* ) = Result.bind
 
-let compile (path : string) : (int, string) result =
-  let input =
-    In_channel.with_open_text (Array.get Sys.argv 1) In_channel.input_all
+let rec parse_args (raw_args : string array) : arguments =
+  let aux args argv =
+    match argv with
+    | "--dump-tokens" -> { args with dump_tokens = true }
+    | "--dump-ast" -> { args with dump_ast = true }
+    | "--dump-ir" -> { args with dump_ir = true }
+    | _ -> { args with source_path = argv }
   in
-  let lexer = Pulse.Lexer.make input in
-  let* program, _ = Pulse.Parser.parse_program lexer in
-  let* ir = Pulse.Ir.flatten program in
-  let asm = Pulse.Codegen.codegen ir in
-  Out_channel.with_open_text "main.pulse.asm" (fun c ->
-      Out_channel.output_string c asm);
-  Ok
-    (Sys.command
-       "nasm -felf64 main.pulse.asm && ld main.pulse.o -o main.pulse.exe")
+  Array.fold_left aux
+    { dump_tokens = false; dump_ast = false; dump_ir = false; source_path = "" }
+    raw_args
+
+and lex_all (lexer : Lexer.t) : (Token.typ list, string) result =
+  let rec aux lexer acc =
+    let* tt, lexer = Lexer.next lexer in
+    match tt with
+    | Token.EOF -> Ok (tt :: acc |> List.rev)
+    | _ -> aux lexer (tt :: acc)
+  in
+  aux lexer []
+
+and dump_tokens (lexer : Lexer.t) : (int, string) result =
+  let* tokens = lex_all lexer in
+  List.map Token.string_of_typ tokens
+  |> String.concat ", " |> Printf.sprintf "[%s]" |> print_endline;
+  Ok 0
+
+and dump_ast (program : Ast.t) : unit = Ast.to_string program |> print_endline
+
+and dump_ir (ir : Ir.instruction list) : unit =
+  List.map Ir.to_string ir |> String.concat "\n" |> print_endline
+
+and exec_pipeline (args : arguments) : (int, string) result =
+  let input = In_channel.with_open_text args.source_path In_channel.input_all in
+  let lexer = Lexer.make input in
+  if args.dump_tokens then dump_tokens lexer
+  else
+    let* program, _ = Parser.parse_program lexer in
+    if args.dump_ast then (
+      dump_ast program;
+      Ok 0)
+    else
+      let* ir = Ir.flatten program in
+      if args.dump_ir then (
+        dump_ir ir;
+        Ok 0)
+      else
+        let asm = Codegen.codegen ir in
+        let base_name = Filename.remove_extension args.source_path in
+        let asm_name = Printf.sprintf "%s.asm" base_name
+        and obj_name = Printf.sprintf "%s.o" base_name in
+        Out_channel.with_open_text asm_name (fun c ->
+            Out_channel.output_string c asm);
+        let cmd =
+          Printf.sprintf "nasm -felf64 %s && ld %s -o %s" asm_name obj_name
+            base_name
+        in
+        let ret_code = Sys.command cmd in
+        Ok ret_code
 
 let () =
-  match compile Sys.argv.(1) with
-  | Ok ret_code -> exit ret_code
+  let args = parse_args Sys.argv in
+  match exec_pipeline args with
+  | Ok ret -> exit ret
   | Error e ->
-      print_endline e;
+      prerr_endline e;
       exit 1

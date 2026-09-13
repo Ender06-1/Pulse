@@ -68,7 +68,12 @@ and epilogue = {|
 
 module StringMap = Map.Make (String)
 
-type register = Rax | Rcx | Rdx | Rsi | Rdi
+type register =
+  | Rax
+  | Rcx
+  | Rdx
+  | Rsi
+  | Rdi
 
 type value =
   | Reg of register
@@ -121,7 +126,7 @@ and string_of_instruction (i : instruction) : string =
   | Call l -> Printf.sprintf "  call %s" l
 
 and value_of_ir (v : Ir.value) : value =
-  match v with Var v -> VReg v | Integer i -> Imm i
+  match v with Tmp v -> VReg v | Integer i -> Imm i
 
 and inst_selection (ir : Ir.instruction list) (g : var_generator) :
     instruction list * var_generator =
