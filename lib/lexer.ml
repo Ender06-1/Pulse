@@ -1,4 +1,9 @@
-type t = { input : string; pos : int }
+type t = {
+  input : string;
+  pos : int;
+}
+
+let ( let* ) = Result.bind
 
 let rec make (input : string) : t = { input; pos = 0 }
 
@@ -29,11 +34,11 @@ and lex_identifier (lexer : t) : Token.typ * t =
         | c when is_ident_char c ->
             aux next_lexer (String.make 1 c |> String.cat acc)
         | _ -> (
-            match Token.to_keyword acc with
+            match Token.keyword_of_string_opt acc with
             | Some t -> (t, lexer)
             | _ -> (Token.Ident acc, lexer)))
     | _ -> (
-        match Token.to_keyword acc with
+        match Token.keyword_of_string_opt acc with
         | Some t -> (t, lexer)
         | _ -> (Token.Ident acc, lexer))
   in
@@ -43,7 +48,7 @@ and next (lexer : t) : (Token.typ * t, string) result =
   match advance lexer with
   | Some (c, next_lexer) -> (
       match c with
-      | ' ' | '\n' -> next_lexer |> next
+      | ' ' | '\n' -> next next_lexer
       | '+' -> Ok (Plus, next_lexer)
       | '-' -> Ok (Minus, next_lexer)
       | '*' -> Ok (Mul, next_lexer)
@@ -51,6 +56,8 @@ and next (lexer : t) : (Token.typ * t, string) result =
       | '%' -> Ok (Mod, next_lexer)
       | ';' -> Ok (SemiColon, next_lexer)
       | '=' -> Ok (Eq, next_lexer)
+      | '{' -> Ok (OBrack, next_lexer)
+      | '}' -> Ok (CBrack, next_lexer)
       | '0' .. '9' -> Ok (lex_integer lexer)
       | c when is_ident_char c -> Ok (lex_identifier lexer)
       | c -> Error (Printf.sprintf "unknown character '%c'" c))

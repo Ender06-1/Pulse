@@ -1,0 +1,7 @@
+var a = 1;
+if a {
+  print 69;
+} else {
+  print 420;
+}
+print 67;

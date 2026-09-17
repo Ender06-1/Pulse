@@ -3,16 +3,13 @@ program =
   ;
 
 stmt =
-  | print_stmt
-  | var_stmt
-  ;
-
-print_stmt =
   | "print" expr ";"
+  | "var" ident "=" expr ";"
+  | "if" expr stmt_block ( "else" stmt_block )?
   ;
 
-var_stmt =
-  | "var" ident "=" expr ";"
+stmt_block =
+  | "{" stmt+ "}"
   ;
 
 expr =

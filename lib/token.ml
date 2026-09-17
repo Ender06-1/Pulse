@@ -5,6 +5,8 @@ type typ =
   (* Keywords *)
   | Print
   | Var
+  | If
+  | Else
   (* Operators *)
   | Plus
   | Minus
@@ -14,6 +16,8 @@ type typ =
   | Eq
   (* Ponctuators *)
   | SemiColon
+  | OBrack
+  | CBrack
   (* Misc *)
   | EOF
 
@@ -23,6 +27,8 @@ let string_of_typ t =
   | Ident i -> "ident " ^ i
   | Print -> "print"
   | Var -> "var"
+  | If -> "if"
+  | Else -> "else"
   | Plus -> "plus"
   | Minus -> "minus"
   | Mul -> "mul"
@@ -30,10 +36,17 @@ let string_of_typ t =
   | Mod -> "mod"
   | Eq -> "equal"
   | SemiColon -> "semicolon"
+  | OBrack -> "open-bracket"
+  | CBrack -> "close-bracket"
   | EOF -> "EOF"
 
-and to_keyword (s : string) =
-  match s with "print" -> Some Print | "var" -> Some Var | _ -> None
+and keyword_of_string_opt (s : string) =
+  match s with
+  | "print" -> Some Print
+  | "var" -> Some Var
+  | "if" -> Some If
+  | "else" -> Some Else
+  | _ -> None
 
 and equal (t1 : typ) (t2 : typ) : bool =
   match (t1, t2) with
@@ -43,6 +56,8 @@ and equal (t1 : typ) (t2 : typ) : bool =
   (* Keywords *)
   | Print, Print -> true
   | Var, Var -> true
+  | If, If -> true
+  | Else, Else -> true
   (* Operators *)
   | Plus, Plus -> true
   | Minus, Minus -> true
@@ -52,6 +67,8 @@ and equal (t1 : typ) (t2 : typ) : bool =
   | Eq, Eq -> true
   (* Ponctuators *)
   | SemiColon, SemiColon -> true
+  | OBrack, OBrack -> true
+  | CBrack, CBrack -> true
   (* Misc *)
   | EOF, EOF -> true
   | _ -> false
