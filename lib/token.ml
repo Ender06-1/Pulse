@@ -7,6 +7,7 @@ type typ =
   | Var
   | If
   | Else
+  | For
   (* Operators *)
   | Plus
   | Minus
@@ -23,21 +24,27 @@ type typ =
 
 let string_of_typ t =
   match t with
+  (* Constants *)
   | Integer i -> "integer " ^ i
   | Ident i -> "ident " ^ i
+  (* Keywords *)
   | Print -> "print"
   | Var -> "var"
   | If -> "if"
   | Else -> "else"
+  | For -> "for"
+  (* Operators *)
   | Plus -> "plus"
   | Minus -> "minus"
   | Mul -> "mul"
   | Div -> "div"
   | Mod -> "mod"
   | Eq -> "equal"
+  (* Ponctuators *)
   | SemiColon -> "semicolon"
   | OBrack -> "open-bracket"
   | CBrack -> "close-bracket"
+  (* Misc *)
   | EOF -> "EOF"
 
 and keyword_of_string_opt (s : string) =
@@ -46,6 +53,7 @@ and keyword_of_string_opt (s : string) =
   | "var" -> Some Var
   | "if" -> Some If
   | "else" -> Some Else
+  | "for" -> Some For
   | _ -> None
 
 and equal (t1 : typ) (t2 : typ) : bool =
@@ -58,6 +66,7 @@ and equal (t1 : typ) (t2 : typ) : bool =
   | Var, Var -> true
   | If, If -> true
   | Else, Else -> true
+  | For, For -> true
   (* Operators *)
   | Plus, Plus -> true
   | Minus, Minus -> true

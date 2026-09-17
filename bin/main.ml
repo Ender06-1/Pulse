@@ -4,7 +4,6 @@ type arguments = {
   dump_tokens : bool;
   dump_ast : bool;
   dump_ir : bool;
-  dump_inst_select : bool;
   source_path : string;
 }
 
@@ -16,17 +15,10 @@ let rec parse_args (raw_args : string array) : arguments =
     | "--dump-tokens" -> { args with dump_tokens = true }
     | "--dump-ast" -> { args with dump_ast = true }
     | "--dump-ir" -> { args with dump_ir = true }
-    | "--dump-inst-select" -> { args with dump_inst_select = true }
     | _ -> { args with source_path = argv }
   in
   Array.fold_left aux
-    {
-      dump_tokens = false;
-      dump_ast = false;
-      dump_ir = false;
-      dump_inst_select = false;
-      source_path = "";
-    }
+    { dump_tokens = false; dump_ast = false; dump_ir = false; source_path = "" }
     raw_args
 
 and lex_all (lexer : Lexer.t) : (Token.typ list, string) result =
@@ -63,22 +55,18 @@ and exec_pipeline (args : arguments) : (int, string) result =
         dump_ir cfg;
         Ok 0)
       else
-        let asm = Codegen_x86_64_linux.codegen cfg args.dump_inst_select in
-        if args.dump_inst_select then (
-          dump_inst_select asm;
-          Ok 0)
-        else
-          let base_name = Filename.remove_extension args.source_path in
-          let asm_name = Printf.sprintf "%s.asm" base_name
-          and obj_name = Printf.sprintf "%s.o" base_name in
-          Out_channel.with_open_text asm_name (fun c ->
-              Out_channel.output_string c asm);
-          let cmd =
-            Printf.sprintf "nasm -felf64 %s && ld %s -o %s" asm_name obj_name
-              base_name
-          in
-          let ret_code = Sys.command cmd in
-          Ok ret_code
+        let asm = Codegen_x86_64_linux.codegen cfg in
+        let base_name = Filename.remove_extension args.source_path in
+        let asm_name = Printf.sprintf "%s.asm" base_name
+        and obj_name = Printf.sprintf "%s.o" base_name in
+        Out_channel.with_open_text asm_name (fun c ->
+            Out_channel.output_string c asm);
+        let cmd =
+          Printf.sprintf "nasm -felf64 %s && ld %s -o %s" asm_name obj_name
+            base_name
+        in
+        let ret_code = Sys.command cmd in
+        Ok ret_code
 
 let () =
   let args = parse_args Sys.argv in

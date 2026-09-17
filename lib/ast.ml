@@ -14,6 +14,7 @@ type stmt =
   | Print of expr
   | VarDecl of string * expr
   | If of expr * stmt list * stmt list option
+  | For of stmt list
 
 type t = stmt list
 
@@ -51,6 +52,9 @@ and string_of_stmt (s : stmt) : string =
         |> Option.fold ~none:"" ~some:(String.concat " ")
       in
       Printf.sprintf "If (%s (%s) (%s))" conds thes elss
+  | For body ->
+      List.map string_of_stmt body
+      |> String.concat " " |> Printf.sprintf "For (%s)"
 
 and to_string (tree : t) : string =
   List.map string_of_stmt tree |> String.concat "\n"

@@ -69,65 +69,69 @@ and string_of_value (v : value) : string =
   | Integer i -> Int64.to_string i
 
 and string_of_instruction (i : instruction) : string =
-  match i with
-  | Print v ->
-      let vals = string_of_value v in
-      Printf.sprintf "print %s" vals
-  | Copy (var, value) ->
-      let var_str = string_of_variable var
-      and value_str = string_of_value value in
-      Printf.sprintf "%s = copy %s" var_str value_str
-  | Add (v, l, r) ->
-      let v_str = string_of_variable v
-      and l_str = string_of_value l
-      and r_str = string_of_value r in
-      Printf.sprintf "%s = add %s, %s" v_str l_str r_str
-  | Sub (v, l, r) ->
-      let v_str = string_of_variable v
-      and l_str = string_of_value l
-      and r_str = string_of_value r in
-      Printf.sprintf "%s = sub %s, %s" v_str l_str r_str
-  | Mul (v, l, r) ->
-      let v_str = string_of_variable v
-      and l_str = string_of_value l
-      and r_str = string_of_value r in
-      Printf.sprintf "%s = mul %s, %s" v_str l_str r_str
-  | Div (v, l, r) ->
-      let v_str = string_of_variable v
-      and l_str = string_of_value l
-      and r_str = string_of_value r in
-      Printf.sprintf "%s = div %s, %s" v_str l_str r_str
-  | Mod (v, l, r) ->
-      let v_str = string_of_variable v
-      and l_str = string_of_value l
-      and r_str = string_of_value r in
-      Printf.sprintf "%s = mod %s, %s" v_str l_str r_str
-  | Cmp (v, l, r) ->
-      let v_str = string_of_variable v
-      and l_str = string_of_value l
-      and r_str = string_of_value r in
-      Printf.sprintf "%s = cmp %s, %s" v_str l_str r_str
+  let inst =
+    match i with
+    | Print v ->
+        let vals = string_of_value v in
+        Printf.sprintf "print %s" vals
+    | Copy (var, value) ->
+        let var_str = string_of_variable var
+        and value_str = string_of_value value in
+        Printf.sprintf "%s = copy %s" var_str value_str
+    | Add (v, l, r) ->
+        let v_str = string_of_variable v
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = add %s, %s" v_str l_str r_str
+    | Sub (v, l, r) ->
+        let v_str = string_of_variable v
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = sub %s, %s" v_str l_str r_str
+    | Mul (v, l, r) ->
+        let v_str = string_of_variable v
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = mul %s, %s" v_str l_str r_str
+    | Div (v, l, r) ->
+        let v_str = string_of_variable v
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = div %s, %s" v_str l_str r_str
+    | Mod (v, l, r) ->
+        let v_str = string_of_variable v
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = mod %s, %s" v_str l_str r_str
+    | Cmp (v, l, r) ->
+        let v_str = string_of_variable v
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = cmp %s, %s" v_str l_str r_str
+  in
+  Printf.sprintf "  %s\n" inst
 
 and string_of_terminator (t : terminator) : string =
-  match t with
-  | Jmp l -> string_of_label l |> Printf.sprintf "jmp %s"
-  | Jnz (v, then_label, else_label) ->
-      let v_str = string_of_value v
-      and then_str = string_of_label then_label
-      and else_str = string_of_label else_label in
-      Printf.sprintf "jnz %s, %s, %s" v_str then_str else_str
-  | Halt -> "hatl"
+  let inst =
+    match t with
+    | Jmp l -> string_of_label l |> Printf.sprintf "jmp %s"
+    | Jnz (v, then_label, else_label) ->
+        let v_str = string_of_value v
+        and then_str = string_of_label then_label
+        and else_str = string_of_label else_label in
+        Printf.sprintf "jnz %s, %s, %s" v_str then_str else_str
+    | Halt -> "hatl"
+  in
+  Printf.sprintf "  %s\n" inst
 
 and string_of_block (b : block) : string =
-  let insts =
-    List.map (fun i -> string_of_instruction i |> String.cat "  ") b.instrs
-    |> String.concat "\n"
+  let insts = List.map string_of_instruction b.instrs |> String.concat ""
   and terms = string_of_terminator b.term
   and label_str = string_of_label b.label in
-  Printf.sprintf "%s:\n%s\n  %s" label_str insts terms
+  Printf.sprintf "%s:\n%s%s" label_str insts terms
 
 and string_of_cfg (g : cfg) : string =
-  List.map string_of_block g |> String.concat "\n"
+  List.map string_of_block g |> String.concat ""
 
 let rec flatten_expr (exp : Ast.expr) (cur_block : block) (ctx : Context.t) :
     value * block * Context.t =
@@ -218,6 +222,15 @@ and flatten_stmt (stmt : Ast.stmt) (cur_block : block) (cfg : cfg)
       | Some else_stmts ->
           flatten_if_else cond then_stmts else_stmts cur_block cfg ctx
       | None -> flatten_if cond then_stmts cur_block cfg ctx)
+  | For body ->
+      let body_label, ctx = Context.gen_label ctx in
+      let cfg = cfg_add_block cur_block (Jmp body_label) cfg in
+      let body_block = cfg_make_block body_label in
+      let body_block, cfg, ctx = flatten_stmt_list body body_block cfg ctx in
+      let cfg = cfg_add_block body_block (Jmp body_label) cfg in
+      let end_label, ctx = Context.gen_label ctx in
+      let cur_block = cfg_make_block end_label in
+      (cur_block, cfg, ctx)
 
 and flatten (tree : Ast.t) : cfg =
   let ctx = Context.empty in

@@ -6,6 +6,7 @@ stmt =
   | "print" expr ";"
   | "var" ident "=" expr ";"
   | "if" expr stmt_block ( "else" stmt_block )?
+  | "for" stmt_block
   ;
 
 stmt_block =

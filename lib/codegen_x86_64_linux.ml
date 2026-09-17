@@ -369,7 +369,7 @@ and register_allocation (program : block list) (ctx : Context.t) :
   in
   aux program ctx []
 
-and codegen (cfg : Ir.cfg) (dump_inst_select : bool) : string =
+and codegen (cfg : Ir.cfg) : string =
   let align16 (n : int) : int =
     int_of_float (ceil (float_of_int n /. 16.)) * 16
   in
@@ -382,7 +382,5 @@ and codegen (cfg : Ir.cfg) (dump_inst_select : bool) : string =
   in
   let ctx = Context.empty in
   let program, ctx = instruction_selection cfg ctx in
-  if dump_inst_select then string_of_program program ctx
-  else
-    let program, _ = register_allocation program ctx in
-    string_of_program program ctx
+  let program, _ = register_allocation program ctx in
+  string_of_program program ctx

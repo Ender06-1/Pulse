@@ -94,6 +94,9 @@ and parse_stmt (lexer : Lexer.t) : (Ast.stmt * Lexer.t, string) result =
         | _ -> Ok (None, lexer)
       in
       Ok (Ast.If (cond, then_block, else_block), lexer)
+  | Token.For ->
+      let* body, lexer = parse_stmt_block lexer in
+      Ok (Ast.For body, lexer)
   | _ -> Error "expected statement"
 
 and parse_program (lexer : Lexer.t) : (Ast.t, string) result =
