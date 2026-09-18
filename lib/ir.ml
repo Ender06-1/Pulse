@@ -151,22 +151,27 @@ and string_of_cfg (g : cfg) : string =
 
 let rec flatten_expr (exp : Ast.expr) (cur_block : block) (ctx : Context.t) :
     value * block * Context.t =
-  match exp with
-  | Integer i -> (Integer i, cur_block, ctx)
-  | Var v ->
+  match exp.kind with
+  | Ast.Integer i -> (Integer i, cur_block, ctx)
+  | Ast.Var v ->
       let t = Context.get_var_tmp v ctx in
       (Temp t, cur_block, ctx)
-  | BinExpr (op, lhs, rhs) -> (
+  | Ast.BinExpr (op, lhs, rhs) -> (
       let lval, cur_block, ctx = flatten_expr lhs cur_block ctx in
       let rval, cur_block, ctx = flatten_expr rhs cur_block ctx in
       let t, ctx = Context.gen_tmp ctx in
       let tmp_val = Temp t in
       match op with
-      | Plus -> (tmp_val, cfg_add_insts [ Add (t, lval, rval) ] cur_block, ctx)
-      | Minus -> (tmp_val, cfg_add_insts [ Sub (t, lval, rval) ] cur_block, ctx)
-      | Mul -> (tmp_val, cfg_add_insts [ Mul (t, lval, rval) ] cur_block, ctx)
-      | Div -> (tmp_val, cfg_add_insts [ Div (t, lval, rval) ] cur_block, ctx)
-      | Mod -> (tmp_val, cfg_add_insts [ Mod (t, lval, rval) ] cur_block, ctx))
+      | Ast.Plus ->
+          (tmp_val, cfg_add_insts [ Add (t, lval, rval) ] cur_block, ctx)
+      | Ast.Minus ->
+          (tmp_val, cfg_add_insts [ Sub (t, lval, rval) ] cur_block, ctx)
+      | Ast.Mul ->
+          (tmp_val, cfg_add_insts [ Mul (t, lval, rval) ] cur_block, ctx)
+      | Ast.Div ->
+          (tmp_val, cfg_add_insts [ Div (t, lval, rval) ] cur_block, ctx)
+      | Ast.Mod ->
+          (tmp_val, cfg_add_insts [ Mod (t, lval, rval) ] cur_block, ctx))
 
 and flatten_stmt_list (stmts : Ast.stmt list) (cur_block : block) (cfg : cfg)
     (ctx : Context.t) : block * cfg * Context.t =
@@ -229,21 +234,21 @@ and flatten_if_else (cond : Ast.expr) (then_stmts : Ast.stmt list)
 
 and flatten_stmt (stmt : Ast.stmt) (cur_block : block) (cfg : cfg)
     (ctx : Context.t) : block * cfg * Context.t =
-  match stmt with
-  | Print exp ->
+  match stmt.kind with
+  | Ast.Print exp ->
       let value, cur_block, ctx = flatten_expr exp cur_block ctx in
       (cfg_add_insts [ Print value ] cur_block, cfg, ctx)
-  | VarDecl (v, exp) ->
+  | Ast.VarDecl (v, exp) ->
       let value, cur_block, ctx = flatten_expr exp cur_block ctx in
       let t, ctx = Context.gen_tmp ctx in
       let ctx = Context.add_var_tmp v t ctx in
       (cfg_add_insts [ Copy (t, value) ] cur_block, cfg, ctx)
-  | If (cond, then_stmts, else_stmts_opt) -> (
+  | Ast.If (cond, then_stmts, else_stmts_opt) -> (
       match else_stmts_opt with
       | Some else_stmts ->
           flatten_if_else cond then_stmts else_stmts cur_block cfg ctx
       | None -> flatten_if cond then_stmts cur_block cfg ctx)
-  | For body ->
+  | Ast.For body ->
       let body_label, ctx = Context.gen_label ctx in
       let cfg = cfg_add_block cur_block (Jmp body_label) cfg in
       let body_block = cfg_make_block body_label in

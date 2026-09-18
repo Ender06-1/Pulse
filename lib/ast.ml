@@ -5,18 +5,28 @@ type bin_op =
   | Div
   | Mod
 
-type expr =
+and expr_kind =
   | Integer of int64
   | BinExpr of bin_op * expr * expr
   | Var of string
 
-type stmt =
+and expr = {
+  kind : expr_kind;
+  loc : Location.t;
+}
+
+and stmt_kind =
   | Print of expr
   | VarDecl of string * expr
   | If of expr * stmt list * stmt list option
   | For of stmt list
 
-type t = stmt list
+and stmt = {
+  kind : stmt_kind;
+  loc : Location.t;
+}
+
+and t = stmt list
 
 let rec string_of_binop (b : bin_op) : string =
   match b with
@@ -26,39 +36,44 @@ let rec string_of_binop (b : bin_op) : string =
   | Div -> "/"
   | Mod -> "%"
 
-and string_of_expr (e : expr) : string =
+and string_of_expr_kind (e : expr_kind) : string =
   match e with
   | Integer i -> Int64.to_string i
   | Var v -> v
   | BinExpr (op, l, r) ->
-      let ls = string_of_expr l
-      and rs = string_of_expr r
+      let ls = string_of_expr_kind l.kind
+      and rs = string_of_expr_kind r.kind
       and ops = string_of_binop op in
       Printf.sprintf "(BinExpr (%s %s %s))" ops ls rs
 
-and string_of_stmt (s : stmt) : string =
+and string_of_stmt_kind (s : stmt_kind) : string =
   match s with
   | Print e ->
-      let exps = string_of_expr e in
+      let exps = string_of_expr_kind e.kind in
       Printf.sprintf "(Print %s)" exps
   | VarDecl (v, e) ->
-      let exps = string_of_expr e in
+      let exps = string_of_expr_kind e.kind in
       Printf.sprintf "(VarDecl (%s, %s))" v exps
-  | If (cond, the, els) ->
-      let conds = string_of_expr cond
-      and thes = List.map string_of_stmt the |> String.concat " "
+  | If (cond, then_block, else_block_opt) ->
+      let conds = string_of_expr_kind cond.kind
+      and thes =
+        List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) then_block
+        |> String.concat " "
       and elss =
-        Option.map (List.map string_of_stmt) els
+        Option.map
+          (List.map (fun (s : stmt) -> string_of_stmt_kind s.kind))
+          else_block_opt
         |> Option.fold ~none:"" ~some:(String.concat " ")
       in
       Printf.sprintf "(If (%s (%s) (%s)))" conds thes elss
   | For body ->
-      List.map string_of_stmt body
+      List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) body
       |> String.concat " "
       |> Printf.sprintf "(For (%s))"
 
 and to_string (tree : t) : string =
-  List.map string_of_stmt tree |> String.concat "\n"
+  List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) tree
+  |> String.concat "\n"
 
 module CheckVar = struct
   module Context = struct
@@ -94,7 +109,7 @@ module CheckVar = struct
   let check (tree : t) : (unit, string) result =
     let rec check_var_expr (exp : expr) (ctx : Context.t) :
         (unit, string) result =
-      match exp with
+      match exp.kind with
       | Integer _ -> Ok ()
       | Var v ->
           if Context.is_var_defined v ctx then Ok ()
@@ -116,7 +131,7 @@ module CheckVar = struct
       aux stmts ctx
     and check_var_stmt (stmt : stmt) (ctx : Context.t) :
         (unit * Context.t, string) result =
-      match stmt with
+      match stmt.kind with
       | Print e ->
           let* _ = check_var_expr e ctx in
           Ok ((), ctx)

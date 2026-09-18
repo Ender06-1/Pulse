@@ -1,4 +1,4 @@
-type typ =
+type kind =
   (* Constants *)
   | Integer of string
   | Ident of string
@@ -22,32 +22,41 @@ type typ =
   (* Misc *)
   | EOF
 
-let string_of_typ t =
-  match t with
+and t = {
+  kind : kind;
+  loc : Location.t;
+}
+
+let rec string_of_kind k =
+  match k with
   (* Constants *)
-  | Integer i -> "integer " ^ i
-  | Ident i -> "ident " ^ i
+  | Integer i -> Printf.sprintf "Integer(%s)" i
+  | Ident i -> Printf.sprintf "Ident(%s)" i
   (* Keywords *)
-  | Print -> "print"
-  | Var -> "var"
-  | If -> "if"
-  | Else -> "else"
-  | For -> "for"
+  | Print -> "Print"
+  | Var -> "Var"
+  | If -> "If"
+  | Else -> "Else"
+  | For -> "For"
   (* Operators *)
-  | Plus -> "plus"
-  | Minus -> "minus"
-  | Mul -> "mul"
-  | Div -> "div"
-  | Mod -> "mod"
-  | Eq -> "equal"
+  | Plus -> "Plus"
+  | Minus -> "Minus"
+  | Mul -> "Mul"
+  | Div -> "Div"
+  | Mod -> "Mod"
+  | Eq -> "Equal"
   (* Ponctuators *)
-  | SemiColon -> "semicolon"
-  | OBrack -> "open-bracket"
-  | CBrack -> "close-bracket"
+  | SemiColon -> "SemiColon"
+  | OBrack -> "OBrack"
+  | CBrack -> "CBrack"
   (* Misc *)
   | EOF -> "EOF"
 
-and keyword_of_string_opt (s : string) =
+and to_string (t : t) : string =
+  let kind_str = string_of_kind t.kind and loc_str = Location.to_string t.loc in
+  Printf.sprintf "%s{%s}" kind_str loc_str
+
+let keyword_of_string_opt (s : string) =
   match s with
   | "print" -> Some Print
   | "var" -> Some Var
@@ -56,8 +65,8 @@ and keyword_of_string_opt (s : string) =
   | "for" -> Some For
   | _ -> None
 
-and equal (t1 : typ) (t2 : typ) : bool =
-  match (t1, t2) with
+and equal_kind (k1 : kind) (k2 : kind) : bool =
+  match (k1, k2) with
   (* Constants *)
   | Integer x, Integer y -> x = y
   | Ident i, Ident j -> i = j

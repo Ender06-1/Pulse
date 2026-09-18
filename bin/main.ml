@@ -21,10 +21,10 @@ let rec parse_args (raw_args : string array) : arguments =
     { dump_tokens = false; dump_ast = false; dump_ir = false; source_path = "" }
     raw_args
 
-and lex_all (lexer : Lexer.t) : (Token.typ list, string) result =
+and lex_all (lexer : Lexer.t) : (Token.t list, string) result =
   let rec aux lexer acc =
     let* tt, lexer = Lexer.next lexer in
-    match tt with
+    match tt.kind with
     | Token.EOF -> Ok (tt :: acc |> List.rev)
     | _ -> aux lexer (tt :: acc)
   in
@@ -32,7 +32,7 @@ and lex_all (lexer : Lexer.t) : (Token.typ list, string) result =
 
 and dump_tokens (lexer : Lexer.t) : (int, string) result =
   let* tokens = lex_all lexer in
-  List.map Token.string_of_typ tokens
+  List.map Token.to_string tokens
   |> String.concat ", " |> Printf.sprintf "[%s]" |> print_endline;
   Ok 0
 
@@ -42,7 +42,7 @@ and dump_inst_select (program : string) : unit = print_endline program
 
 and exec_pipeline (args : arguments) : (int, string) result =
   let input = In_channel.with_open_text args.source_path In_channel.input_all in
-  let lexer = Lexer.make input in
+  let lexer = Lexer.make input args.source_path in
   if args.dump_tokens then dump_tokens lexer
   else
     let* program = Parser.parse_program lexer in
