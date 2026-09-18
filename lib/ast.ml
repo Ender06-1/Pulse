@@ -106,21 +106,22 @@ module CheckVar = struct
 
   let ( let* ) = Result.bind
 
-  let check (tree : t) : (unit, string) result =
+  let check (tree : t) : (unit, Report.t) result =
     let rec check_var_expr (exp : expr) (ctx : Context.t) :
-        (unit, string) result =
+        (unit, Report.t) result =
       match exp.kind with
       | Integer _ -> Ok ()
       | Var v ->
           if Context.is_var_defined v ctx then Ok ()
           else
             let msg = Printf.sprintf "unbound variable '%s'" v in
-            Error msg
+            let report = Report.make exp.loc msg in
+            Error report
       | BinExpr (_, l, r) ->
           let* _ = check_var_expr l ctx in
           check_var_expr r ctx
     and check_var_stmt_list (stmts : stmt list) (ctx : Context.t) :
-        (unit * Context.t, string) result =
+        (unit * Context.t, Report.t) result =
       let rec aux stmts ctx =
         match stmts with
         | [] -> Ok ((), ctx)
@@ -130,7 +131,7 @@ module CheckVar = struct
       in
       aux stmts ctx
     and check_var_stmt (stmt : stmt) (ctx : Context.t) :
-        (unit * Context.t, string) result =
+        (unit * Context.t, Report.t) result =
       match stmt.kind with
       | Print e ->
           let* _ = check_var_expr e ctx in

@@ -1,30 +1,39 @@
 let ( let* ) = Result.bind
 
 let rec expect (lexer : Lexer.t) (kind : Token.kind) :
-    (Token.t * Lexer.t, string) result =
+    (Token.t * Lexer.t, Report.t) result =
   let* tt, lexer = Lexer.next lexer in
   if Token.equal_kind kind tt.kind then Ok (tt, lexer)
-  else Error (Printf.sprintf "expected '%s'" (Token.string_of_kind kind))
+  else
+    let msg = Printf.sprintf "expected '%s'" (Token.show_kind kind) in
+    let report = Report.make tt.loc msg in
+    Error report
 
-and parse_ident (lexer : Lexer.t) : (Token.t * string * Lexer.t, string) result
-    =
+and parse_ident (lexer : Lexer.t) :
+    (Token.t * string * Lexer.t, Report.t) result =
   let* tt, lexer = Lexer.next lexer in
   match tt.kind with
   | Token.Ident i -> Ok (tt, i, lexer)
-  | _ -> Error "expected identifier"
+  | _ ->
+      let msg = "expected identifier" in
+      let report = Report.make tt.loc msg in
+      Error report
 
-and parse_prim_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, string) result =
+and parse_prim_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
   let* tt, lexer = Lexer.next lexer in
   let* kind, lexer =
     match tt.kind with
     | Token.Integer n -> Ok (Ast.Integer (Int64.of_string n), lexer)
     | Token.Ident i -> Ok (Ast.Var i, lexer)
-    | _ -> Error "expected integer or identifier"
+    | _ ->
+        let msg = "expected integer or identifier" in
+        let report = Report.make tt.loc msg in
+        Error report
   in
   let expr : Ast.expr = { kind; loc = tt.loc } in
   Ok (expr, lexer)
 
-and parse_mul_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, string) result =
+and parse_mul_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
   let* prim, lexer = parse_prim_expr lexer in
   let rec aux lexer acc =
     let* tt, next_lexer = Lexer.next lexer in
@@ -51,7 +60,7 @@ and parse_mul_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, string) result =
   in
   aux lexer prim
 
-and parse_add_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, string) result =
+and parse_add_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
   let* mul, lexer = parse_mul_expr lexer in
   let rec aux lexer acc =
     let* tt, next_lexer = Lexer.next lexer in
@@ -72,11 +81,11 @@ and parse_add_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, string) result =
   in
   aux lexer mul
 
-and parse_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, string) result =
+and parse_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
   parse_add_expr lexer
 
 and parse_stmt_block (lexer : Lexer.t) :
-    (Ast.stmt list * Lexer.t, string) result =
+    (Ast.stmt list * Lexer.t, Report.t) result =
   let rec aux lexer acc =
     let* stmt, lexer = parse_stmt lexer in
     let* tt, next_lexer = Lexer.next lexer in
@@ -88,9 +97,11 @@ and parse_stmt_block (lexer : Lexer.t) :
   match tt.kind with
   | Token.OBrack -> aux lexer []
   | _ ->
-      Error (Token.string_of_kind Token.OBrack |> Printf.sprintf "expected %s")
+      let msg = Token.show_kind Token.OBrack |> Printf.sprintf "expected %s" in
+      let report = Report.make tt.loc msg in
+      Error report
 
-and parse_stmt (lexer : Lexer.t) : (Ast.stmt * Lexer.t, string) result =
+and parse_stmt (lexer : Lexer.t) : (Ast.stmt * Lexer.t, Report.t) result =
   let* tt, lexer = Lexer.next lexer in
   match tt.kind with
   | Token.Print ->
@@ -126,9 +137,12 @@ and parse_stmt (lexer : Lexer.t) : (Ast.stmt * Lexer.t, string) result =
       let* body, lexer = parse_stmt_block lexer in
       let stmt : Ast.stmt = { kind = Ast.For body; loc = tt.loc } in
       Ok (stmt, lexer)
-  | _ -> Error "expected statement"
+  | _ ->
+      let msg = "expected statement" in
+      let report = Report.make tt.loc msg in
+      Error report
 
-and parse_program (lexer : Lexer.t) : (Ast.t, string) result =
+and parse_program (lexer : Lexer.t) : (Ast.t, Report.t) result =
   let rec aux lexer tree =
     let* tt, next_lexer = Lexer.next lexer in
     match tt.kind with

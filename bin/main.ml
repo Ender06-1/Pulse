@@ -21,7 +21,7 @@ let rec parse_args (raw_args : string array) : arguments =
     { dump_tokens = false; dump_ast = false; dump_ir = false; source_path = "" }
     raw_args
 
-and lex_all (lexer : Lexer.t) : (Token.t list, string) result =
+and lex_all (lexer : Lexer.t) : (Token.t list, Report.t) result =
   let rec aux lexer acc =
     let* tt, lexer = Lexer.next lexer in
     match tt.kind with
@@ -30,7 +30,7 @@ and lex_all (lexer : Lexer.t) : (Token.t list, string) result =
   in
   aux lexer []
 
-and dump_tokens (lexer : Lexer.t) : (int, string) result =
+and dump_tokens (lexer : Lexer.t) : (int, Report.t) result =
   let* tokens = lex_all lexer in
   List.map Token.to_string tokens
   |> String.concat ", " |> Printf.sprintf "[%s]" |> print_endline;
@@ -40,7 +40,7 @@ and dump_ast (program : Ast.t) : unit = Ast.to_string program |> print_endline
 and dump_ir (cfg : Ir.cfg) : unit = Ir.string_of_cfg cfg |> print_endline
 and dump_inst_select (program : string) : unit = print_endline program
 
-and exec_pipeline (args : arguments) : (int, string) result =
+and exec_pipeline (args : arguments) : (int, Report.t) result =
   let input = In_channel.with_open_text args.source_path In_channel.input_all in
   let lexer = Lexer.make input args.source_path in
   if args.dump_tokens then dump_tokens lexer
@@ -73,6 +73,6 @@ let () =
   let args = parse_args Sys.argv in
   match exec_pipeline args with
   | Ok ret -> exit ret
-  | Error e ->
-      prerr_endline e;
+  | Error r ->
+      Report.to_string r |> prerr_endline;
       exit 1

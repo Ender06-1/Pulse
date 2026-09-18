@@ -21,7 +21,7 @@ OPTIONS:
 
 ## TODO
 
-- Location in error messages
+- Comments
 - Conditional loops
 - Break/Continue
 - Functions

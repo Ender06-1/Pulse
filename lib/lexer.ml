@@ -58,7 +58,7 @@ and lex_identifier (lexer : t) : Token.kind * Location.t * t =
   in
   (kind, lexer.loc, next_lexer)
 
-and next (lexer : t) : (Token.t * t, string) result =
+and next (lexer : t) : (Token.t * t, Report.t) result =
   let rec aux lexer =
     match advance lexer with
     | Some (c, next_lexer) -> (
@@ -75,7 +75,10 @@ and next (lexer : t) : (Token.t * t, string) result =
         | '}' -> Ok (Token.CBrack, lexer.loc, next_lexer)
         | '0' .. '9' -> Ok (lex_integer lexer)
         | c when is_ident_char c -> Ok (lex_identifier lexer)
-        | c -> Error (Printf.sprintf "unknown character '%c'" c))
+        | c ->
+            let msg = Printf.sprintf "unknown character '%c'" c in
+            let report = Report.make lexer.loc msg in
+            Error report)
     | _ -> Ok (EOF, lexer.loc, lexer)
   in
   let* kind, loc, lexer = aux lexer in

@@ -52,6 +52,31 @@ let rec string_of_kind k =
   (* Misc *)
   | EOF -> "EOF"
 
+and show_kind k =
+  match k with
+  (* Constants *)
+  | Integer i -> i
+  | Ident i -> i
+  (* Keywords *)
+  | Print -> "print"
+  | Var -> "var"
+  | If -> "if"
+  | Else -> "else"
+  | For -> "for"
+  (* Operators *)
+  | Plus -> "+"
+  | Minus -> "-"
+  | Mul -> "*"
+  | Div -> "/"
+  | Mod -> "%"
+  | Eq -> "="
+  (* Ponctuators *)
+  | SemiColon -> ";"
+  | OBrack -> "{"
+  | CBrack -> "}"
+  (* Misc *)
+  | EOF -> "EOF"
+
 and to_string (t : t) : string =
   let kind_str = string_of_kind t.kind and loc_str = Location.to_string t.loc in
   Printf.sprintf "%s{%s}" kind_str loc_str
