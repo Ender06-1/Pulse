@@ -28,4 +28,5 @@ mul_expr =
 prim_expr =
   | integer
   | ident
+  | "(" expr ")"
   ;

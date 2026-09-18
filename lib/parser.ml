@@ -25,6 +25,17 @@ and parse_prim_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
     match tt.kind with
     | Token.Integer n -> Ok (Ast.Integer (Int64.of_string n), lexer)
     | Token.Ident i -> Ok (Ast.Var i, lexer)
+    | Token.OParen -> (
+        let* exp, lexer = parse_expr lexer in
+        let* tt, lexer = Lexer.next lexer in
+        match tt.kind with
+        | Token.CParen -> Ok (exp.kind, lexer)
+        | _ ->
+            let msg =
+              Token.show_kind Token.CParen |> Printf.sprintf "expected '%s'"
+            in
+            let report = Report.make tt.loc msg in
+            Error report)
     | _ ->
         let msg = "expected integer or identifier" in
         let report = Report.make tt.loc msg in

@@ -19,6 +19,8 @@ type kind =
   | SemiColon
   | OBrack
   | CBrack
+  | OParen
+  | CParen
   (* Misc *)
   | EOF
 
@@ -49,6 +51,8 @@ let rec string_of_kind k =
   | SemiColon -> "SemiColon"
   | OBrack -> "OBrack"
   | CBrack -> "CBrack"
+  | OParen -> "OParen"
+  | CParen -> "CParen"
   (* Misc *)
   | EOF -> "EOF"
 
@@ -74,6 +78,8 @@ and show_kind k =
   | SemiColon -> ";"
   | OBrack -> "{"
   | CBrack -> "}"
+  | OParen -> "("
+  | CParen -> ")"
   (* Misc *)
   | EOF -> "EOF"
 
@@ -112,6 +118,8 @@ and equal_kind (k1 : kind) (k2 : kind) : bool =
   | SemiColon, SemiColon -> true
   | OBrack, OBrack -> true
   | CBrack, CBrack -> true
+  | OParen, OParen -> true
+  | CParen, CParen -> true
   (* Misc *)
   | EOF, EOF -> true
   | _ -> false

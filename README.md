@@ -21,7 +21,6 @@ OPTIONS:
 
 ## TODO
 
-- Comments
 - Conditional loops
 - Break/Continue
 - Functions

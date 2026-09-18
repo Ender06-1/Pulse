@@ -87,6 +87,8 @@ and next (lexer : t) : (Token.t * t, Report.t) result =
         | '=' -> Ok (Token.Eq, lexer.loc, next_lexer)
         | '{' -> Ok (Token.OBrack, lexer.loc, next_lexer)
         | '}' -> Ok (Token.CBrack, lexer.loc, next_lexer)
+        | '(' -> Ok (Token.OParen, lexer.loc, next_lexer)
+        | ')' -> Ok (Token.CParen, lexer.loc, next_lexer)
         | '0' .. '9' -> Ok (lex_integer lexer)
         | c when is_ident_char c -> Ok (lex_identifier lexer)
         | c ->
