@@ -11,6 +11,14 @@ OPTIONS:
 - `--dump-ast`: print the ast in s-expr form
 - `--dump-ir`: print the pulse ir
 
+## Features
+
+- u64 numbers
+- unsigned 64 bit addition, substraction, multiplication, division and modulo
+- variables
+- if/else conditions (then branch on cond != 0)
+- unconditional loops (for {...})
+
 ## Sys V ABI conventions
 
 ```asm
