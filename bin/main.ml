@@ -46,6 +46,7 @@ and exec_pipeline (args : arguments) : (int, string) result =
   if args.dump_tokens then dump_tokens lexer
   else
     let* program = Parser.parse_program lexer in
+    let* _ = Ast.CheckVar.check program in
     if args.dump_ast then (
       dump_ast program;
       Ok 0)

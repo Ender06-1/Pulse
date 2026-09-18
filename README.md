@@ -19,6 +19,16 @@ OPTIONS:
 - if/else conditions (then branch on cond != 0)
 - unconditional loops (for {...})
 
+## TODO
+
+- Location in error messages
+- Conditional loops
+- Break/Continue
+- Functions
+- Stdlib/main and multi file compilation
+- polymorphic print (u64, char)
+- Turing completeness
+
 ## Sys V ABI conventions
 
 ```asm

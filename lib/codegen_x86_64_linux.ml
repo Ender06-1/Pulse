@@ -67,35 +67,42 @@ _start:
   mov   rbp, rsp
 |}
 
-module StringMap = Map.Make (String)
-module IntMap = Map.Make (Int)
-
 module Context = struct
+  module IntMap = Map.Make (Int)
+
   type t = {
     vreg_acc : int;
-    var_map : int StringMap.t;
-    vreg_map : int IntMap.t;
+    var_vreg_map : int IntMap.t;
+    stack_acc : int;
+    vreg_mem_map : int IntMap.t;
   }
 
   let empty : t =
-    { vreg_acc = 1; var_map = StringMap.empty; vreg_map = IntMap.empty }
+    {
+      vreg_acc = 1;
+      var_vreg_map = IntMap.empty;
+      vreg_mem_map = IntMap.empty;
+      stack_acc = 0;
+    }
 
   let gen_vreg (ctx : t) : int * t =
     (ctx.vreg_acc, { ctx with vreg_acc = ctx.vreg_acc + 1 })
 
-  let add_var (name : string) (vreg : int) (ctx : t) : t =
-    let var_map = StringMap.add name vreg ctx.var_map in
-    { ctx with var_map }
+  and add_vreg (t : int) (vreg : int) (ctx : t) : t =
+    let var_vreg_map = IntMap.add t vreg ctx.var_vreg_map in
+    { ctx with var_vreg_map }
 
-  let get_var_vreg_opt (name : string) (ctx : t) : int option =
-    StringMap.find_opt name ctx.var_map
+  and find_vreg (t : int) (ctx : t) : int = IntMap.find t ctx.var_vreg_map
 
-  let add_vreg (vreg : int) (mem : int) (ctx : t) : t =
-    let vreg_map = IntMap.add vreg mem ctx.vreg_map in
-    { ctx with vreg_map }
+  and alloc (ctx : t) : int * t =
+    (ctx.stack_acc + 8, { ctx with stack_acc = ctx.stack_acc + 8 })
 
-  let get_vreg_mem_opt (vreg : int) (ctx : t) : int option =
-    IntMap.find_opt vreg ctx.vreg_map
+  and add_alloc (vreg : int) (mem : int) (ctx : t) : t =
+    let vreg_mem_map = IntMap.add vreg mem ctx.vreg_mem_map in
+    { ctx with vreg_mem_map }
+
+  and find_alloc_opt (vreg : int) (ctx : t) : int option =
+    IntMap.find_opt vreg ctx.vreg_mem_map
 end
 
 type register =
@@ -172,45 +179,42 @@ and string_of_block (b : block) : string =
   and l_str = string_of_label b.label in
   Printf.sprintf "%s:\n%s" l_str inst_str
 
-let rec value_of_variable (v : Ir.variable) (ctx : Context.t) :
-    value * Context.t =
-  let name = match v with Var v -> v | Tmp t -> t in
-  match Context.get_var_vreg_opt name ctx with
-  | Some vreg -> (VReg vreg, ctx)
-  | None ->
-      let vreg, ctx = Context.gen_vreg ctx in
-      let ctx = Context.add_var name vreg ctx in
-      (VReg vreg, ctx)
-
 and value_of_ir (v : Ir.value) (ctx : Context.t) : value * Context.t =
   match v with
   | Integer i -> (Imm i, ctx)
-  | Variable v -> value_of_variable v ctx
+  | Temp t ->
+      let vreg = Context.find_vreg t ctx in
+      (VReg vreg, ctx)
+
+and vreg_of_tmp (t : int) (ctx : Context.t) : value * Context.t =
+  let vreg, ctx = Context.gen_vreg ctx in
+  let ctx = Context.add_vreg t vreg ctx in
+  (VReg vreg, ctx)
 
 let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
     block list * Context.t =
-  let instruction_of_ir (inst : Ir.instruction) (ctx : Context.t) :
+  let select_of_inst (inst : Ir.instruction) (ctx : Context.t) :
       instruction list * Context.t =
     match inst with
     | Print v ->
         let v, ctx = value_of_ir v ctx in
         ([ Mov (Reg Rdi, v); Call "dump" ], ctx)
     | Copy (dst, src) ->
-        let dst_v, ctx = value_of_variable dst ctx in
+        let dst_v, ctx = vreg_of_tmp dst ctx in
         let src_v, ctx = value_of_ir src ctx in
         ([ Mov (dst_v, src_v) ], ctx)
     | Add (dst, l, r) ->
-        let dst_v, ctx = value_of_variable dst ctx in
+        let dst_v, ctx = vreg_of_tmp dst ctx in
         let l_v, ctx = value_of_ir l ctx in
         let r_v, ctx = value_of_ir r ctx in
         ([ Mov (dst_v, l_v); Add (dst_v, r_v) ], ctx)
     | Sub (dst, l, r) ->
-        let dst_v, ctx = value_of_variable dst ctx in
+        let dst_v, ctx = vreg_of_tmp dst ctx in
         let l_v, ctx = value_of_ir l ctx in
         let r_v, ctx = value_of_ir r ctx in
         ([ Mov (dst_v, l_v); Sub (dst_v, r_v) ], ctx)
     | Mul (dst, l, r) ->
-        let dst_v, ctx = value_of_variable dst ctx in
+        let dst_v, ctx = vreg_of_tmp dst ctx in
         let l_v, ctx = value_of_ir l ctx in
         let r_v, ctx = value_of_ir r ctx in
         ( [
@@ -221,7 +225,7 @@ let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
           ],
           ctx )
     | Div (dst, l, r) ->
-        let dst_v, ctx = value_of_variable dst ctx in
+        let dst_v, ctx = vreg_of_tmp dst ctx in
         let l_v, ctx = value_of_ir l ctx in
         let r_v, ctx = value_of_ir r ctx in
         ( [
@@ -233,7 +237,7 @@ let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
           ],
           ctx )
     | Mod (dst, l, r) ->
-        let dst_v, ctx = value_of_variable dst ctx in
+        let dst_v, ctx = vreg_of_tmp dst ctx in
         let l_v, ctx = value_of_ir l ctx in
         let r_v, ctx = value_of_ir r ctx in
         ( [
@@ -244,8 +248,8 @@ let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
             Mov (dst_v, Reg Rdx);
           ],
           ctx )
-    | Cmp (dst, l, r) ->
-        let dst_v, ctx = value_of_variable dst ctx in
+    | Ceq (dst, l, r) ->
+        let dst_v, ctx = vreg_of_tmp dst ctx in
         let l_v, ctx = value_of_ir l ctx in
         let r_v, ctx = value_of_ir r ctx in
         ( [
@@ -277,7 +281,7 @@ let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
       match insts with
       | [] -> (acc, ctx)
       | i :: tl ->
-          let insts, ctx = instruction_of_ir i ctx in
+          let insts, ctx = select_of_inst i ctx in
           aux tl ctx (acc @ insts)
     in
     aux insts ctx []
@@ -296,18 +300,18 @@ let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
 
 and register_allocation (program : block list) (ctx : Context.t) :
     block list * Context.t =
-  let is_vreg (v : value) : bool = match v with VReg _ -> true | _ -> false in
-  let regalloc_value (v : value) (ctx : Context.t) : value * Context.t =
-    match v with
-    | VReg v -> (
-        match Context.get_vreg_mem_opt v ctx with
-        | Some m -> (Mem m, ctx)
-        | None ->
-            let ctx = Context.add_vreg v (v * 8) ctx in
-            (Mem (v * 8), ctx))
-    | _ -> (v, ctx)
-  in
-  let regalloc_inst (i : instruction) (ctx : Context.t) :
+  let rec is_vreg (v : value) : bool =
+    match v with VReg _ -> true | _ -> false
+  and regalloc_vreg (vreg : int) (ctx : Context.t) : value * Context.t =
+    match Context.find_alloc_opt vreg ctx with
+    | Some i -> (Mem i, ctx)
+    | None ->
+        let i, ctx = Context.alloc ctx in
+        let ctx = Context.add_alloc vreg i ctx in
+        (Mem i, ctx)
+  and regalloc_value (v : value) (ctx : Context.t) : value * Context.t =
+    match v with VReg v -> regalloc_vreg v ctx | _ -> (v, ctx)
+  and regalloc_inst (i : instruction) (ctx : Context.t) :
       instruction list * Context.t =
     match i with
     | Call _ -> ([ i ], ctx)
