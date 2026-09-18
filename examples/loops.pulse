@@ -1,3 +1,5 @@
+# prints infinite 69s
+
 for {
   print 69;
 }

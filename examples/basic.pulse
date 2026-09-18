@@ -1,3 +1,5 @@
+# prints 69
+
 print 34 + 35;
 print 100 - 31;
 print 3 * 23;

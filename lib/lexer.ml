@@ -28,6 +28,19 @@ and advance (lexer : t) : (char * t) option =
 and is_ident_char c =
   match c with 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' -> true | _ -> false
 
+and is_whitespace c = match c with ' ' | '\n' | '\t' -> true | _ -> false
+
+and skip_whitespace (lexer : t) : t =
+  match advance lexer with
+  | Some (c, lexer) when is_whitespace c -> skip_whitespace lexer
+  | _ -> lexer
+
+and skip_comment (lexer : t) : t =
+  match advance lexer with
+  | Some ('\n', lexer) -> lexer
+  | None -> lexer
+  | Some (_, lexer) -> skip_comment lexer
+
 and lex_integer (lexer : t) : Token.kind * Location.t * t =
   let rec aux lexer acc =
     match advance lexer with
@@ -60,10 +73,11 @@ and lex_identifier (lexer : t) : Token.kind * Location.t * t =
 
 and next (lexer : t) : (Token.t * t, Report.t) result =
   let rec aux lexer =
+    let lexer = skip_whitespace lexer in
     match advance lexer with
     | Some (c, next_lexer) -> (
         match c with
-        | ' ' | '\n' -> aux next_lexer
+        | '#' -> skip_comment next_lexer |> aux
         | '+' -> Ok (Token.Plus, lexer.loc, next_lexer)
         | '-' -> Ok (Token.Minus, lexer.loc, next_lexer)
         | '*' -> Ok (Token.Mul, lexer.loc, next_lexer)
