@@ -14,14 +14,14 @@ OPTIONS:
 ## Features
 
 - u64 numbers
-- unsigned 64 bit addition, substraction, multiplication, division and modulo
+- u64 addition, substraction, multiplication, division and modulo
+- u64 gt, lt, ge, le, equality and inequality comparisons
 - variables
 - if/else conditions (then branch on cond != 0)
-- unconditional loops (for {...})
+- conditional loops (for ... {...})
 
 ## TODO
 
-- Conditional loops
 - Break/Continue
 - Functions
 - Stdlib/main and multi file compilation

@@ -6,7 +6,8 @@ stmt =
   | "print" expr ";"
   | "var" ident "=" expr ";"
   | "if" expr stmt_block ( "else" stmt_block )?
-  | "for" stmt_block
+  | "for" expr stmt_block
+  | ident "=" expr ";"
   ;
 
 stmt_block =
@@ -14,7 +15,15 @@ stmt_block =
   ;
 
 expr =
-  | add_expr
+  | equal_expr
+  ;
+
+equal_expr =
+  | rela_expr ( ( "==" | "!=" ) rela_expr )*
+  ;
+
+rela_expr =
+  | add_expr ( ( ">" | "<" | ">=" | "<=" add_expr )*
   ;
 
 add_expr =

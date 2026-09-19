@@ -71,6 +71,8 @@ and lex_identifier (lexer : t) : Token.kind * Location.t * t =
   in
   (kind, lexer.loc, next_lexer)
 
+and peek (lexer : t) : char option = Option.map fst (advance lexer)
+
 and next (lexer : t) : (Token.t * t, Report.t) result =
   let rec aux lexer =
     let lexer = skip_whitespace lexer in
@@ -84,11 +86,29 @@ and next (lexer : t) : (Token.t * t, Report.t) result =
         | '/' -> Ok (Token.Div, lexer.loc, next_lexer)
         | '%' -> Ok (Token.Mod, lexer.loc, next_lexer)
         | ';' -> Ok (Token.SemiColon, lexer.loc, next_lexer)
-        | '=' -> Ok (Token.Eq, lexer.loc, next_lexer)
+        | '!' as c -> (
+            match advance next_lexer with
+            | Some ('=', next_lexer) -> Ok (Token.Deq, lexer.loc, next_lexer)
+            | _ ->
+                let msg = Printf.sprintf "unknown character '%c'" c in
+                let report = Report.make lexer.loc msg in
+                Error report)
+        | '=' -> (
+            match advance next_lexer with
+            | Some ('=', next_lexer) -> Ok (Token.Deq, lexer.loc, next_lexer)
+            | _ -> Ok (Token.Eq, lexer.loc, next_lexer))
         | '{' -> Ok (Token.OBrack, lexer.loc, next_lexer)
         | '}' -> Ok (Token.CBrack, lexer.loc, next_lexer)
         | '(' -> Ok (Token.OParen, lexer.loc, next_lexer)
         | ')' -> Ok (Token.CParen, lexer.loc, next_lexer)
+        | '>' -> (
+            match advance next_lexer with
+            | Some ('=', next_lexer) -> Ok (Token.Ge, lexer.loc, next_lexer)
+            | _ -> Ok (Token.Gt, lexer.loc, next_lexer))
+        | '<' -> (
+            match advance next_lexer with
+            | Some ('=', next_lexer) -> Ok (Token.Le, lexer.loc, next_lexer)
+            | _ -> Ok (Token.Lt, lexer.loc, next_lexer))
         | '0' .. '9' -> Ok (lex_integer lexer)
         | c when is_ident_char c -> Ok (lex_identifier lexer)
         | c ->

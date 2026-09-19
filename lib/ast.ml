@@ -4,6 +4,12 @@ type bin_op =
   | Mul
   | Div
   | Mod
+  | Eq
+  | Neq
+  | Gt
+  | Lt
+  | Ge
+  | Le
 
 and expr_kind =
   | Integer of int64
@@ -19,7 +25,8 @@ and stmt_kind =
   | Print of expr
   | VarDecl of string * expr
   | If of expr * stmt list * stmt list option
-  | For of stmt list
+  | For of expr * stmt list
+  | Assign of string * expr
 
 and stmt = {
   kind : stmt_kind;
@@ -35,6 +42,12 @@ let rec string_of_binop (b : bin_op) : string =
   | Mul -> "*"
   | Div -> "/"
   | Mod -> "%"
+  | Eq -> "=="
+  | Neq -> "!="
+  | Gt -> ">"
+  | Lt -> "<"
+  | Ge -> ">="
+  | Le -> "<="
 
 and string_of_expr_kind (e : expr_kind) : string =
   match e with
@@ -66,10 +79,16 @@ and string_of_stmt_kind (s : stmt_kind) : string =
         |> Option.fold ~none:"" ~some:(String.concat " ")
       in
       Printf.sprintf "(If (%s (%s) (%s)))" conds thes elss
-  | For body ->
-      List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) body
-      |> String.concat " "
-      |> Printf.sprintf "(For (%s))"
+  | For (cond, body) ->
+      let cond_str = string_of_expr_kind cond.kind
+      and body_str =
+        List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) body
+        |> String.concat " "
+      in
+      Printf.sprintf "(For (%s %s))" cond_str body_str
+  | Assign (i, e) ->
+      let e_str = string_of_expr_kind e.kind in
+      Printf.sprintf "(Assign (%s %s))" i e_str
 
 and to_string (tree : t) : string =
   List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) tree
@@ -152,11 +171,19 @@ module CheckVar = struct
               let ctx = Context.pop_scope ctx in
               Ok ((), ctx)
           | None -> Ok ((), ctx))
-      | For body ->
+      | For (cond, body) ->
+          let* _ = check_var_expr cond ctx in
           let ctx = Context.push_scope ctx in
           let* _, ctx = check_var_stmt_list body ctx in
           let ctx = Context.pop_scope ctx in
           Ok ((), ctx)
+      | Assign (i, e) ->
+          let* _ = check_var_expr e ctx in
+          if Context.is_var_defined i ctx then Ok ((), ctx)
+          else
+            let msg = Printf.sprintf "unbound variable '%s'" i in
+            let report = Report.make stmt.loc msg in
+            Error report
     in
     let* _ = check_var_stmt_list tree Context.empty in
     Ok ()

@@ -92,7 +92,8 @@ module Context = struct
     let var_vreg_map = IntMap.add t vreg ctx.var_vreg_map in
     { ctx with var_vreg_map }
 
-  and find_vreg (t : int) (ctx : t) : int = IntMap.find t ctx.var_vreg_map
+  and find_vreg_opt (t : int) (ctx : t) : int option =
+    IntMap.find_opt t ctx.var_vreg_map
 
   and alloc (ctx : t) : int * t =
     (ctx.stack_acc + 8, { ctx with stack_acc = ctx.stack_acc + 8 })
@@ -126,8 +127,13 @@ type instruction =
   | Div of value
   | Cmp of value * value
   | CMovE of value * value
+  | CMovNe of value * value
+  | CMovG of value * value
+  | CMovGe of value * value
+  | CMovL of value * value
+  | CMovLe of value * value
   | Jmp of string
-  | Jnz of string
+  | Jne of string
 
 type block = {
   label : int;
@@ -170,8 +176,23 @@ and string_of_instruction (i : instruction) : string =
   | CMovE (dst, src) ->
       let dst_str = string_of_value dst and src_str = string_of_value src in
       Printf.sprintf "  cmove %s, %s\n" dst_str src_str
+  | CMovNe (dst, src) ->
+      let dst_str = string_of_value dst and src_str = string_of_value src in
+      Printf.sprintf "  cmovne %s, %s\n" dst_str src_str
+  | CMovG (dst, src) ->
+      let dst_str = string_of_value dst and src_str = string_of_value src in
+      Printf.sprintf "  cmovg %s, %s\n" dst_str src_str
+  | CMovGe (dst, src) ->
+      let dst_str = string_of_value dst and src_str = string_of_value src in
+      Printf.sprintf "  cmovge %s, %s\n" dst_str src_str
+  | CMovL (dst, src) ->
+      let dst_str = string_of_value dst and src_str = string_of_value src in
+      Printf.sprintf "  cmovl %s, %s\n" dst_str src_str
+  | CMovLe (dst, src) ->
+      let dst_str = string_of_value dst and src_str = string_of_value src in
+      Printf.sprintf "  cmovle %s, %s\n" dst_str src_str
   | Jmp l -> Printf.sprintf "  jmp  %s\n" l
-  | Jnz l -> Printf.sprintf "  jnz  %s\n" l
+  | Jne l -> Printf.sprintf "  jne  %s\n" l
 
 and string_of_block (b : block) : string =
   let inst_str =
@@ -182,14 +203,16 @@ and string_of_block (b : block) : string =
 and value_of_ir (v : Ir.value) (ctx : Context.t) : value * Context.t =
   match v with
   | Integer i -> (Imm i, ctx)
-  | Temp t ->
-      let vreg = Context.find_vreg t ctx in
-      (VReg vreg, ctx)
+  | Temp t -> (
+      match Context.find_vreg_opt t ctx with
+      | Some vreg -> (VReg vreg, ctx)
+      | None ->
+          let vreg, ctx = Context.gen_vreg ctx in
+          let ctx = Context.add_vreg t vreg ctx in
+          (VReg vreg, ctx))
 
 and vreg_of_tmp (t : int) (ctx : Context.t) : value * Context.t =
-  let vreg, ctx = Context.gen_vreg ctx in
-  let ctx = Context.add_vreg t vreg ctx in
-  (VReg vreg, ctx)
+  value_of_ir (Temp t) ctx
 
 let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
     block list * Context.t =
@@ -260,6 +283,66 @@ let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
             Mov (dst_v, Reg Rax);
           ],
           ctx )
+    | Cne (dst, l, r) ->
+        let dst_v, ctx = vreg_of_tmp dst ctx in
+        let l_v, ctx = value_of_ir l ctx in
+        let r_v, ctx = value_of_ir r ctx in
+        ( [
+            Cmp (l_v, r_v);
+            Mov (Reg Rax, Imm 0L);
+            Mov (Reg Rdx, Imm 1L);
+            CMovNe (Reg Rax, Reg Rdx);
+            Mov (dst_v, Reg Rax);
+          ],
+          ctx )
+    | Cgt (dst, l, r) ->
+        let dst_v, ctx = vreg_of_tmp dst ctx in
+        let l_v, ctx = value_of_ir l ctx in
+        let r_v, ctx = value_of_ir r ctx in
+        ( [
+            Cmp (l_v, r_v);
+            Mov (Reg Rax, Imm 0L);
+            Mov (Reg Rdx, Imm 1L);
+            CMovG (Reg Rax, Reg Rdx);
+            Mov (dst_v, Reg Rax);
+          ],
+          ctx )
+    | Cge (dst, l, r) ->
+        let dst_v, ctx = vreg_of_tmp dst ctx in
+        let l_v, ctx = value_of_ir l ctx in
+        let r_v, ctx = value_of_ir r ctx in
+        ( [
+            Cmp (l_v, r_v);
+            Mov (Reg Rax, Imm 0L);
+            Mov (Reg Rdx, Imm 1L);
+            CMovGe (Reg Rax, Reg Rdx);
+            Mov (dst_v, Reg Rax);
+          ],
+          ctx )
+    | Clt (dst, l, r) ->
+        let dst_v, ctx = vreg_of_tmp dst ctx in
+        let l_v, ctx = value_of_ir l ctx in
+        let r_v, ctx = value_of_ir r ctx in
+        ( [
+            Cmp (l_v, r_v);
+            Mov (Reg Rax, Imm 0L);
+            Mov (Reg Rdx, Imm 1L);
+            CMovL (Reg Rax, Reg Rdx);
+            Mov (dst_v, Reg Rax);
+          ],
+          ctx )
+    | Cle (dst, l, r) ->
+        let dst_v, ctx = vreg_of_tmp dst ctx in
+        let l_v, ctx = value_of_ir l ctx in
+        let r_v, ctx = value_of_ir r ctx in
+        ( [
+            Cmp (l_v, r_v);
+            Mov (Reg Rax, Imm 0L);
+            Mov (Reg Rdx, Imm 1L);
+            CMovLe (Reg Rax, Reg Rdx);
+            Mov (dst_v, Reg Rax);
+          ],
+          ctx )
   in
   let instruction_of_terminator (t : Ir.terminator) (ctx : Context.t) :
       instruction list * Context.t =
@@ -269,7 +352,7 @@ let rec instruction_selection (cfg : Ir.cfg) (ctx : Context.t) :
         let v, ctx = value_of_ir v ctx in
         ( [
             Cmp (v, Imm 0L);
-            Jnz (string_of_label nzero);
+            Jne (string_of_label nzero);
             Jmp (string_of_label zero);
           ],
           ctx )
@@ -302,6 +385,7 @@ and register_allocation (program : block list) (ctx : Context.t) :
     block list * Context.t =
   let rec is_vreg (v : value) : bool =
     match v with VReg _ -> true | _ -> false
+  and is_imm (v : value) : bool = match v with Imm _ -> true | _ -> false
   and regalloc_vreg (vreg : int) (ctx : Context.t) : value * Context.t =
     match Context.find_alloc_opt vreg ctx with
     | Some i -> (Mem i, ctx)
@@ -342,7 +426,9 @@ and register_allocation (program : block list) (ctx : Context.t) :
     | Cmp (src1, src2) ->
         let src1_value, ctx = regalloc_value src1 ctx in
         let src2_value, ctx = regalloc_value src2 ctx in
-        if is_vreg src1 && is_vreg src2 then
+        if is_imm src1 then
+          ([ Mov (Reg Rax, src1_value); Cmp (Reg Rax, src2_value) ], ctx)
+        else if is_vreg src1 && is_vreg src2 then
           ([ Mov (Reg Rax, src2_value); Cmp (src1_value, Reg Rax) ], ctx)
         else ([ Cmp (src1_value, src2_value) ], ctx)
     | CMovE (dst, src) ->
@@ -351,7 +437,37 @@ and register_allocation (program : block list) (ctx : Context.t) :
         if is_vreg dst && is_vreg src then
           ([ Mov (Reg Rax, src_value); CMovE (dst_value, Reg Rax) ], ctx)
         else ([ CMovE (dst_value, src_value) ], ctx)
-    | Jmp _ | Jnz _ -> ([ i ], ctx)
+    | CMovNe (dst, src) ->
+        let src_value, ctx = regalloc_value src ctx in
+        let dst_value, ctx = regalloc_value dst ctx in
+        if is_vreg dst && is_vreg src then
+          ([ Mov (Reg Rax, src_value); CMovNe (dst_value, Reg Rax) ], ctx)
+        else ([ CMovNe (dst_value, src_value) ], ctx)
+    | CMovG (dst, src) ->
+        let src_value, ctx = regalloc_value src ctx in
+        let dst_value, ctx = regalloc_value dst ctx in
+        if is_vreg dst && is_vreg src then
+          ([ Mov (Reg Rax, src_value); CMovG (dst_value, Reg Rax) ], ctx)
+        else ([ CMovG (dst_value, src_value) ], ctx)
+    | CMovGe (dst, src) ->
+        let src_value, ctx = regalloc_value src ctx in
+        let dst_value, ctx = regalloc_value dst ctx in
+        if is_vreg dst && is_vreg src then
+          ([ Mov (Reg Rax, src_value); CMovGe (dst_value, Reg Rax) ], ctx)
+        else ([ CMovGe (dst_value, src_value) ], ctx)
+    | CMovL (dst, src) ->
+        let src_value, ctx = regalloc_value src ctx in
+        let dst_value, ctx = regalloc_value dst ctx in
+        if is_vreg dst && is_vreg src then
+          ([ Mov (Reg Rax, src_value); CMovL (dst_value, Reg Rax) ], ctx)
+        else ([ CMovL (dst_value, src_value) ], ctx)
+    | CMovLe (dst, src) ->
+        let src_value, ctx = regalloc_value src ctx in
+        let dst_value, ctx = regalloc_value dst ctx in
+        if is_vreg dst && is_vreg src then
+          ([ Mov (Reg Rax, src_value); CMovLe (dst_value, Reg Rax) ], ctx)
+        else ([ CMovLe (dst_value, src_value) ], ctx)
+    | Jmp _ | Jne _ -> ([ i ], ctx)
   in
   let regalloc_block b ctx =
     let rec aux insts ctx acc =

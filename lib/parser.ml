@@ -92,8 +92,62 @@ and parse_add_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
   in
   aux lexer mul
 
+and parse_rela_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
+  let* add, lexer = parse_add_expr lexer in
+  let rec aux lexer acc =
+    let* tt, next_lexer = Lexer.next lexer in
+    match tt.kind with
+    | Token.Gt ->
+        let* add, lexer = parse_add_expr next_lexer in
+        let expr : Ast.expr =
+          { kind = Ast.BinExpr (Ast.Gt, acc, add); loc = tt.loc }
+        in
+        aux lexer expr
+    | Token.Lt ->
+        let* add, lexer = parse_add_expr next_lexer in
+        let expr : Ast.expr =
+          { kind = Ast.BinExpr (Ast.Lt, acc, add); loc = tt.loc }
+        in
+        aux lexer expr
+    | Token.Ge ->
+        let* add, lexer = parse_add_expr next_lexer in
+        let expr : Ast.expr =
+          { kind = Ast.BinExpr (Ast.Ge, acc, add); loc = tt.loc }
+        in
+        aux lexer expr
+    | Token.Le ->
+        let* add, lexer = parse_add_expr next_lexer in
+        let expr : Ast.expr =
+          { kind = Ast.BinExpr (Ast.Le, acc, add); loc = tt.loc }
+        in
+        aux lexer expr
+    | _ -> Ok (acc, lexer)
+  in
+  aux lexer add
+
+and parse_equal_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
+  let* rela, lexer = parse_rela_expr lexer in
+  let rec aux lexer acc =
+    let* tt, next_lexer = Lexer.next lexer in
+    match tt.kind with
+    | Token.Deq ->
+        let* rela, lexer = parse_rela_expr next_lexer in
+        let expr : Ast.expr =
+          { kind = Ast.BinExpr (Ast.Eq, acc, rela); loc = tt.loc }
+        in
+        aux lexer expr
+    | Token.Neq ->
+        let* rela, lexer = parse_rela_expr next_lexer in
+        let expr : Ast.expr =
+          { kind = Ast.BinExpr (Ast.Neq, acc, rela); loc = tt.loc }
+        in
+        aux lexer expr
+    | _ -> Ok (acc, lexer)
+  in
+  aux lexer rela
+
 and parse_expr (lexer : Lexer.t) : (Ast.expr * Lexer.t, Report.t) result =
-  parse_add_expr lexer
+  parse_equal_expr lexer
 
 and parse_stmt_block (lexer : Lexer.t) :
     (Ast.stmt list * Lexer.t, Report.t) result =
@@ -145,8 +199,15 @@ and parse_stmt (lexer : Lexer.t) : (Ast.stmt * Lexer.t, Report.t) result =
       in
       Ok (stmt, lexer)
   | Token.For ->
+      let* cond, lexer = parse_expr lexer in
       let* body, lexer = parse_stmt_block lexer in
-      let stmt : Ast.stmt = { kind = Ast.For body; loc = tt.loc } in
+      let stmt : Ast.stmt = { kind = Ast.For (cond, body); loc = tt.loc } in
+      Ok (stmt, lexer)
+  | Token.Ident i ->
+      let* _, lexer = expect lexer Token.Eq in
+      let* expr, lexer = parse_expr lexer in
+      let* _, lexer = expect lexer Token.SemiColon in
+      let stmt : Ast.stmt = { kind = Ast.Assign (i, expr); loc = tt.loc } in
       Ok (stmt, lexer)
   | _ ->
       let msg = "expected statement" in

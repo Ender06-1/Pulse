@@ -15,6 +15,12 @@ type kind =
   | Div
   | Mod
   | Eq
+  | Deq
+  | Neq
+  | Gt
+  | Lt
+  | Ge
+  | Le
   (* Ponctuators *)
   | SemiColon
   | OBrack
@@ -47,6 +53,12 @@ let rec string_of_kind k =
   | Div -> "Div"
   | Mod -> "Mod"
   | Eq -> "Equal"
+  | Deq -> "DoubleEqual"
+  | Neq -> "NotEqual"
+  | Gt -> "GreaterThan"
+  | Lt -> "LessThan"
+  | Ge -> "GreaterEqual"
+  | Le -> "LessEqual"
   (* Ponctuators *)
   | SemiColon -> "SemiColon"
   | OBrack -> "OBrack"
@@ -74,6 +86,12 @@ and show_kind k =
   | Div -> "/"
   | Mod -> "%"
   | Eq -> "="
+  | Deq -> "=="
+  | Neq -> "!="
+  | Gt -> ">"
+  | Lt -> "<"
+  | Ge -> ">="
+  | Le -> "<="
   (* Ponctuators *)
   | SemiColon -> ";"
   | OBrack -> "{"
@@ -114,6 +132,12 @@ and equal_kind (k1 : kind) (k2 : kind) : bool =
   | Div, Div -> true
   | Mod, Mod -> true
   | Eq, Eq -> true
+  | Deq, Deq -> true
+  | Neq, Neq -> true
+  | Gt, Gt -> true
+  | Lt, Lt -> true
+  | Ge, Ge -> true
+  | Le, Le -> true
   (* Ponctuators *)
   | SemiColon, SemiColon -> true
   | OBrack, OBrack -> true

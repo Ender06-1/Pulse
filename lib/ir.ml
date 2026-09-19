@@ -53,6 +53,11 @@ type instruction =
   | Div of int * value * value
   | Mod of int * value * value
   | Ceq of int * value * value
+  | Cne of int * value * value
+  | Cgt of int * value * value
+  | Clt of int * value * value
+  | Cge of int * value * value
+  | Cle of int * value * value
 
 type terminator =
   | Jmp of int
@@ -124,6 +129,31 @@ and string_of_instruction (i : instruction) : string =
         and l_str = string_of_value l
         and r_str = string_of_value r in
         Printf.sprintf "%s = ceq %s, %s" t_str l_str r_str
+    | Cne (t, l, r) ->
+        let t_str = string_of_tmp t
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = cne %s, %s" t_str l_str r_str
+    | Cgt (t, l, r) ->
+        let t_str = string_of_tmp t
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = cgt %s, %s" t_str l_str r_str
+    | Clt (t, l, r) ->
+        let t_str = string_of_tmp t
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = clt %s, %s" t_str l_str r_str
+    | Cge (t, l, r) ->
+        let t_str = string_of_tmp t
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = cge %s, %s" t_str l_str r_str
+    | Cle (t, l, r) ->
+        let t_str = string_of_tmp t
+        and l_str = string_of_value l
+        and r_str = string_of_value r in
+        Printf.sprintf "%s = cle %s, %s" t_str l_str r_str
   in
   Printf.sprintf "  %s\n" inst
 
@@ -171,7 +201,15 @@ let rec flatten_expr (exp : Ast.expr) (cur_block : block) (ctx : Context.t) :
       | Ast.Div ->
           (tmp_val, cfg_add_insts [ Div (t, lval, rval) ] cur_block, ctx)
       | Ast.Mod ->
-          (tmp_val, cfg_add_insts [ Mod (t, lval, rval) ] cur_block, ctx))
+          (tmp_val, cfg_add_insts [ Mod (t, lval, rval) ] cur_block, ctx)
+      | Ast.Eq -> (tmp_val, cfg_add_insts [ Ceq (t, lval, rval) ] cur_block, ctx)
+      | Ast.Neq ->
+          (tmp_val, cfg_add_insts [ Cne (t, lval, rval) ] cur_block, ctx)
+      | Ast.Gt -> (tmp_val, cfg_add_insts [ Cgt (t, lval, rval) ] cur_block, ctx)
+      | Ast.Lt -> (tmp_val, cfg_add_insts [ Clt (t, lval, rval) ] cur_block, ctx)
+      | Ast.Ge -> (tmp_val, cfg_add_insts [ Cge (t, lval, rval) ] cur_block, ctx)
+      | Ast.Le -> (tmp_val, cfg_add_insts [ Cle (t, lval, rval) ] cur_block, ctx)
+      )
 
 and flatten_stmt_list (stmts : Ast.stmt list) (cur_block : block) (cfg : cfg)
     (ctx : Context.t) : block * cfg * Context.t =
@@ -188,14 +226,10 @@ and flatten_if (cond : Ast.expr) (then_stmts : Ast.stmt list)
     (cur_block : block) (cfg : cfg) (ctx : Context.t) : block * cfg * Context.t
     =
   let cond_value, cur_block, ctx = flatten_expr cond cur_block ctx in
-  let cmp_t, ctx = Context.gen_tmp ctx in
-  let cur_block =
-    cfg_add_insts [ Ceq (cmp_t, cond_value, Integer 0L) ] cur_block
-  in
   let then_label, ctx = Context.gen_label ctx in
   let end_label, ctx = Context.gen_label ctx in
   let cfg =
-    cfg_add_block cur_block (Jnz (Temp cmp_t, end_label, then_label)) cfg
+    cfg_add_block cur_block (Jnz (cond_value, then_label, end_label)) cfg
   in
   let then_block = cfg_make_block then_label in
   let ctx = Context.push_scope ctx in
@@ -209,15 +243,11 @@ and flatten_if_else (cond : Ast.expr) (then_stmts : Ast.stmt list)
     (else_stmts : Ast.stmt list) (cur_block : block) (cfg : cfg)
     (ctx : Context.t) : block * cfg * Context.t =
   let cond_value, cur_block, ctx = flatten_expr cond cur_block ctx in
-  let cmp_t, ctx = Context.gen_tmp ctx in
-  let cur_block =
-    cfg_add_insts [ Ceq (cmp_t, cond_value, Integer 0L) ] cur_block
-  in
   let then_label, ctx = Context.gen_label ctx in
   let else_label, ctx = Context.gen_label ctx in
   let end_label, ctx = Context.gen_label ctx in
   let cfg =
-    cfg_add_block cur_block (Jnz (Temp cmp_t, else_label, then_label)) cfg
+    cfg_add_block cur_block (Jnz (cond_value, then_label, else_label)) cfg
   in
   let then_block = cfg_make_block then_label
   and else_block = cfg_make_block else_label in
@@ -231,6 +261,24 @@ and flatten_if_else (cond : Ast.expr) (then_stmts : Ast.stmt list)
   let cfg = cfg_add_block else_block (Jmp end_label) cfg in
   let end_block = cfg_make_block end_label in
   (end_block, cfg, ctx)
+
+and flatten_for (cond : Ast.expr) (body_stmts : Ast.stmt list)
+    (cur_block : block) (cfg : cfg) (ctx : Context.t) : block * cfg * Context.t
+    =
+  let cond_label, ctx = Context.gen_label ctx in
+  let body_label, ctx = Context.gen_label ctx in
+  let end_label, ctx = Context.gen_label ctx in
+  let cfg = cfg_add_block cur_block (Jmp cond_label) cfg in
+  let cur_block = cfg_make_block cond_label in
+  let cond_value, cur_block, ctx = flatten_expr cond cur_block ctx in
+  let cfg =
+    cfg_add_block cur_block (Jnz (cond_value, body_label, end_label)) cfg
+  in
+  let cur_block = cfg_make_block body_label in
+  let cur_block, cfg, ctx = flatten_stmt_list body_stmts cur_block cfg ctx in
+  let cfg = cfg_add_block cur_block (Jmp cond_label) cfg in
+  let cur_block = cfg_make_block end_label in
+  (cur_block, cfg, ctx)
 
 and flatten_stmt (stmt : Ast.stmt) (cur_block : block) (cfg : cfg)
     (ctx : Context.t) : block * cfg * Context.t =
@@ -248,16 +296,11 @@ and flatten_stmt (stmt : Ast.stmt) (cur_block : block) (cfg : cfg)
       | Some else_stmts ->
           flatten_if_else cond then_stmts else_stmts cur_block cfg ctx
       | None -> flatten_if cond then_stmts cur_block cfg ctx)
-  | Ast.For body ->
-      let body_label, ctx = Context.gen_label ctx in
-      let cfg = cfg_add_block cur_block (Jmp body_label) cfg in
-      let body_block = cfg_make_block body_label in
-      let ctx = Context.push_scope ctx in
-      let body_block, cfg, ctx = flatten_stmt_list body body_block cfg ctx in
-      let ctx = Context.pop_scope ctx in
-      let cfg = cfg_add_block body_block (Jmp body_label) cfg in
-      let end_label, ctx = Context.gen_label ctx in
-      let cur_block = cfg_make_block end_label in
+  | Ast.For (cond, body) -> flatten_for cond body cur_block cfg ctx
+  | Ast.Assign (i, e) ->
+      let t = Context.get_var_tmp i ctx in
+      let e_value, cur_block, ctx = flatten_expr e cur_block ctx in
+      let cur_block = cfg_add_insts [ Copy (t, e_value) ] cur_block in
       (cur_block, cfg, ctx)
 
 and flatten (tree : Ast.t) : cfg =
