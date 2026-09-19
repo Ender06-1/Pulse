@@ -8,6 +8,8 @@ stmt =
   | "if" expr stmt_block ( "else" stmt_block )?
   | "for" expr stmt_block
   | ident "=" expr ";"
+  | "break" ";"
+  | "continue" ";"
   ;
 
 stmt_block =

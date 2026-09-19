@@ -1,3 +1,5 @@
+let ( let* ) = Result.bind
+
 module Context = struct
   module StringMap = Map.Make (String)
 
@@ -5,10 +7,24 @@ module Context = struct
     tmp_acc : int;
     label_acc : int;
     var_tmp_scopes : int StringMap.t list;
+    label_stack : (int * int) list;
   }
 
   let empty : t =
-    { tmp_acc = 0; label_acc = 0; var_tmp_scopes = [ StringMap.empty ] }
+    {
+      tmp_acc = 0;
+      label_acc = 0;
+      var_tmp_scopes = [ StringMap.empty ];
+      label_stack = [];
+    }
+
+  and to_string (ctx : t) : string =
+    let label_stack_str =
+      List.map (fun (l1, l2) -> Printf.sprintf "(%d, %d)" l1 l2) ctx.label_stack
+      |> String.concat "; "
+    in
+    Printf.sprintf "Context{tmp_acc = %d; label_acc = %d; label_stack = [%s]}"
+      ctx.tmp_acc ctx.label_acc label_stack_str
 
   and gen_tmp (ctx : t) : int * t =
     (ctx.tmp_acc, { ctx with tmp_acc = ctx.tmp_acc + 1 })
@@ -38,6 +54,17 @@ module Context = struct
           match StringMap.find_opt name s with Some t -> t | None -> aux tl)
     in
     aux ctx.var_tmp_scopes
+
+  and push_labels (l1 : int) (l2 : int) (ctx : t) : t =
+    { ctx with label_stack = (l1, l2) :: ctx.label_stack }
+
+  and get_labels (ctx : t) : (int * int) option =
+    match ctx.label_stack with [] -> None | (l1, l2) :: tl -> Some (l1, l2)
+
+  and pop_labels (ctx : t) : t =
+    assert (not (List.is_empty ctx.label_stack));
+    let label_stack = List.tl ctx.label_stack in
+    { ctx with label_stack }
 end
 
 type value =
@@ -71,8 +98,6 @@ type block = {
 }
 
 type cfg = block list
-
-let ( let* ) = Result.bind
 
 let cfg_add_insts (instrs : instruction list) (b : block) : block =
   { b with instrs = b.instrs @ instrs }
@@ -212,19 +237,19 @@ let rec flatten_expr (exp : Ast.expr) (cur_block : block) (ctx : Context.t) :
       )
 
 and flatten_stmt_list (stmts : Ast.stmt list) (cur_block : block) (cfg : cfg)
-    (ctx : Context.t) : block * cfg * Context.t =
+    (ctx : Context.t) : (block * cfg * Context.t, Report.t) result =
   let rec aux stmts cur_block cfg ctx =
     match stmts with
-    | [] -> (cur_block, cfg, ctx)
+    | [] -> Ok (cur_block, cfg, ctx)
     | s :: tl ->
-        let cur_block, cfg, ctx = flatten_stmt s cur_block cfg ctx in
+        let* cur_block, cfg, ctx = flatten_stmt s cur_block cfg ctx in
         aux tl cur_block cfg ctx
   in
   aux stmts cur_block cfg ctx
 
 and flatten_if (cond : Ast.expr) (then_stmts : Ast.stmt list)
-    (cur_block : block) (cfg : cfg) (ctx : Context.t) : block * cfg * Context.t
-    =
+    (cur_block : block) (cfg : cfg) (ctx : Context.t) :
+    (block * cfg * Context.t, Report.t) result =
   let cond_value, cur_block, ctx = flatten_expr cond cur_block ctx in
   let then_label, ctx = Context.gen_label ctx in
   let end_label, ctx = Context.gen_label ctx in
@@ -233,15 +258,15 @@ and flatten_if (cond : Ast.expr) (then_stmts : Ast.stmt list)
   in
   let then_block = cfg_make_block then_label in
   let ctx = Context.push_scope ctx in
-  let then_block, cfg, ctx = flatten_stmt_list then_stmts then_block cfg ctx in
+  let* then_block, cfg, ctx = flatten_stmt_list then_stmts then_block cfg ctx in
   let ctx = Context.pop_scope ctx in
   let cfg = cfg_add_block then_block (Jmp end_label) cfg in
   let end_block = cfg_make_block end_label in
-  (end_block, cfg, ctx)
+  Ok (end_block, cfg, ctx)
 
 and flatten_if_else (cond : Ast.expr) (then_stmts : Ast.stmt list)
     (else_stmts : Ast.stmt list) (cur_block : block) (cfg : cfg)
-    (ctx : Context.t) : block * cfg * Context.t =
+    (ctx : Context.t) : (block * cfg * Context.t, Report.t) result =
   let cond_value, cur_block, ctx = flatten_expr cond cur_block ctx in
   let then_label, ctx = Context.gen_label ctx in
   let else_label, ctx = Context.gen_label ctx in
@@ -252,19 +277,19 @@ and flatten_if_else (cond : Ast.expr) (then_stmts : Ast.stmt list)
   let then_block = cfg_make_block then_label
   and else_block = cfg_make_block else_label in
   let ctx = Context.push_scope ctx in
-  let then_block, cfg, ctx = flatten_stmt_list then_stmts then_block cfg ctx in
+  let* then_block, cfg, ctx = flatten_stmt_list then_stmts then_block cfg ctx in
   let ctx = Context.pop_scope ctx in
   let cfg = cfg_add_block then_block (Jmp end_label) cfg in
   let ctx = Context.push_scope ctx in
-  let else_block, cfg, ctx = flatten_stmt_list else_stmts else_block cfg ctx in
+  let* else_block, cfg, ctx = flatten_stmt_list else_stmts else_block cfg ctx in
   let ctx = Context.pop_scope ctx in
   let cfg = cfg_add_block else_block (Jmp end_label) cfg in
   let end_block = cfg_make_block end_label in
-  (end_block, cfg, ctx)
+  Ok (end_block, cfg, ctx)
 
 and flatten_for (cond : Ast.expr) (body_stmts : Ast.stmt list)
-    (cur_block : block) (cfg : cfg) (ctx : Context.t) : block * cfg * Context.t
-    =
+    (cur_block : block) (cfg : cfg) (ctx : Context.t) :
+    (block * cfg * Context.t, Report.t) result =
   let cond_label, ctx = Context.gen_label ctx in
   let body_label, ctx = Context.gen_label ctx in
   let end_label, ctx = Context.gen_label ctx in
@@ -275,22 +300,24 @@ and flatten_for (cond : Ast.expr) (body_stmts : Ast.stmt list)
     cfg_add_block cur_block (Jnz (cond_value, body_label, end_label)) cfg
   in
   let cur_block = cfg_make_block body_label in
-  let cur_block, cfg, ctx = flatten_stmt_list body_stmts cur_block cfg ctx in
+  let ctx = Context.push_labels body_label end_label ctx in
+  let* cur_block, cfg, ctx = flatten_stmt_list body_stmts cur_block cfg ctx in
+  let ctx = Context.pop_labels ctx in
   let cfg = cfg_add_block cur_block (Jmp cond_label) cfg in
   let cur_block = cfg_make_block end_label in
-  (cur_block, cfg, ctx)
+  Ok (cur_block, cfg, ctx)
 
 and flatten_stmt (stmt : Ast.stmt) (cur_block : block) (cfg : cfg)
-    (ctx : Context.t) : block * cfg * Context.t =
+    (ctx : Context.t) : (block * cfg * Context.t, Report.t) result =
   match stmt.kind with
   | Ast.Print exp ->
       let value, cur_block, ctx = flatten_expr exp cur_block ctx in
-      (cfg_add_insts [ Print value ] cur_block, cfg, ctx)
+      Ok (cfg_add_insts [ Print value ] cur_block, cfg, ctx)
   | Ast.VarDecl (v, exp) ->
       let value, cur_block, ctx = flatten_expr exp cur_block ctx in
       let t, ctx = Context.gen_tmp ctx in
       let ctx = Context.add_var_tmp v t ctx in
-      (cfg_add_insts [ Copy (t, value) ] cur_block, cfg, ctx)
+      Ok (cfg_add_insts [ Copy (t, value) ] cur_block, cfg, ctx)
   | Ast.If (cond, then_stmts, else_stmts_opt) -> (
       match else_stmts_opt with
       | Some else_stmts ->
@@ -301,12 +328,35 @@ and flatten_stmt (stmt : Ast.stmt) (cur_block : block) (cfg : cfg)
       let t = Context.get_var_tmp i ctx in
       let e_value, cur_block, ctx = flatten_expr e cur_block ctx in
       let cur_block = cfg_add_insts [ Copy (t, e_value) ] cur_block in
-      (cur_block, cfg, ctx)
+      Ok (cur_block, cfg, ctx)
+  | Ast.Break -> (
+      match Context.get_labels ctx with
+      | None ->
+          let msg = "break outside of loop" in
+          let report = Report.make stmt.loc msg in
+          Error report
+      | Some (_, label) ->
+          let cfg = cfg_add_block cur_block (Jmp label) cfg in
+          let next_label, ctx = Context.gen_label ctx in
+          let cur_block = cfg_make_block next_label in
+          Ok (cur_block, cfg, ctx))
+  | Ast.Continue -> (
+      match Context.get_labels ctx with
+      | None ->
+          let msg = "continue outside of loop" in
+          let report = Report.make stmt.loc msg in
+          Error report
+      | Some (label, _) ->
+          let cfg = cfg_add_block cur_block (Jmp label) cfg in
+          let next_label, ctx = Context.gen_label ctx in
+          let cur_block = cfg_make_block next_label in
+          Ok (cur_block, cfg, ctx))
 
-and flatten (tree : Ast.t) : cfg =
+and flatten (tree : Ast.t) : (cfg, Report.t) result =
   let ctx = Context.empty in
   let start_label, ctx = Context.gen_label ctx in
   let cfg = [] in
   let start_block = cfg_make_block start_label in
-  let final_block, cfg, ctx = flatten_stmt_list tree start_block cfg ctx in
-  cfg_add_block final_block Halt cfg
+  let* final_block, cfg, ctx = flatten_stmt_list tree start_block cfg ctx in
+  let cfg = cfg_add_block final_block Halt cfg in
+  Ok cfg

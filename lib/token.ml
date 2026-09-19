@@ -8,6 +8,8 @@ type kind =
   | If
   | Else
   | For
+  | Break
+  | Continue
   (* Operators *)
   | Plus
   | Minus
@@ -46,6 +48,8 @@ let rec string_of_kind k =
   | If -> "If"
   | Else -> "Else"
   | For -> "For"
+  | Break -> "Break"
+  | Continue -> "Continue"
   (* Operators *)
   | Plus -> "Plus"
   | Minus -> "Minus"
@@ -79,6 +83,8 @@ and show_kind k =
   | If -> "if"
   | Else -> "else"
   | For -> "for"
+  | Break -> "break"
+  | Continue -> "continue"
   (* Operators *)
   | Plus -> "+"
   | Minus -> "-"
@@ -112,6 +118,8 @@ let keyword_of_string_opt (s : string) =
   | "if" -> Some If
   | "else" -> Some Else
   | "for" -> Some For
+  | "break" -> Some Break
+  | "continue" -> Some Continue
   | _ -> None
 
 and equal_kind (k1 : kind) (k2 : kind) : bool =
@@ -125,6 +133,8 @@ and equal_kind (k1 : kind) (k2 : kind) : bool =
   | If, If -> true
   | Else, Else -> true
   | For, For -> true
+  | Break, Break -> true
+  | Continue, Continue -> true
   (* Operators *)
   | Plus, Plus -> true
   | Minus, Minus -> true

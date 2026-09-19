@@ -18,11 +18,10 @@ OPTIONS:
 - u64 gt, lt, ge, le, equality and inequality comparisons
 - variables
 - if/else conditions (then branch on cond != 0)
-- conditional loops (for ... {...})
+- conditional loops (for ... {...}), with break and continue
 
 ## TODO
 
-- Break/Continue
 - Functions
 - Stdlib/main and multi file compilation
 - polymorphic print (u64, char)

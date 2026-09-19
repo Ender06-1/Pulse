@@ -51,7 +51,7 @@ and exec_pipeline (args : arguments) : (int, Report.t) result =
       dump_ast program;
       Ok 0)
     else
-      let cfg = Ir.flatten program in
+      let* cfg = Ir.flatten program in
       if args.dump_ir then (
         dump_ir cfg;
         Ok 0)

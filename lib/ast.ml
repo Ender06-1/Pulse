@@ -27,6 +27,8 @@ and stmt_kind =
   | If of expr * stmt list * stmt list option
   | For of expr * stmt list
   | Assign of string * expr
+  | Break
+  | Continue
 
 and stmt = {
   kind : stmt_kind;
@@ -89,6 +91,8 @@ and string_of_stmt_kind (s : stmt_kind) : string =
   | Assign (i, e) ->
       let e_str = string_of_expr_kind e.kind in
       Printf.sprintf "(Assign (%s %s))" i e_str
+  | Break -> "(Break)"
+  | Continue -> "(Continue)"
 
 and to_string (tree : t) : string =
   List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) tree
@@ -184,6 +188,7 @@ module CheckVar = struct
             let msg = Printf.sprintf "unbound variable '%s'" i in
             let report = Report.make stmt.loc msg in
             Error report
+      | Break | Continue -> Ok ((), ctx)
     in
     let* _ = check_var_stmt_list tree Context.empty in
     Ok ()

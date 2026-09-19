@@ -209,6 +209,14 @@ and parse_stmt (lexer : Lexer.t) : (Ast.stmt * Lexer.t, Report.t) result =
       let* _, lexer = expect lexer Token.SemiColon in
       let stmt : Ast.stmt = { kind = Ast.Assign (i, expr); loc = tt.loc } in
       Ok (stmt, lexer)
+  | Token.Break ->
+      let* _, lexer = expect lexer Token.SemiColon in
+      let stmt : Ast.stmt = { kind = Ast.Break; loc = tt.loc } in
+      Ok (stmt, lexer)
+  | Token.Continue ->
+      let* _, lexer = expect lexer Token.SemiColon in
+      let stmt : Ast.stmt = { kind = Ast.Continue; loc = tt.loc } in
+      Ok (stmt, lexer)
   | _ ->
       let msg = "expected statement" in
       let report = Report.make tt.loc msg in
