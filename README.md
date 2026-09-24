@@ -9,6 +9,7 @@ Simple programming language.
 OPTIONS:
 - `--dump-tokens`: print the tokens from the lexer
 - `--dump-ast`: print the ast in s-expr form
+- `--dump-typed-ast`: print the typed ast in s-expr form
 - `--dump-ir`: print the pulse ir
 
 ## Features
@@ -19,12 +20,15 @@ OPTIONS:
 - variables
 - if/else conditions (then branch on cond != 0)
 - conditional loops (for ... {...}), with break and continue
+- functions
+- typed expressions (u64, void)
 
 ## TODO
 
-- Functions
 - Stdlib/main and multi file compilation
-- polymorphic print (u64, char)
+- Char type
+- Polymorphic print (u64, char)
+- Arrays
 - Turing completeness
 
 ## Sys V ABI conventions
