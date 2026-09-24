@@ -370,7 +370,7 @@ let rec instruction_selection (program : Ir.fn list) : fn list =
             Mov (dst_v, Reg Rax);
           ],
           ctx )
-    | Call (dst_opt, fn, params) ->
+    | Call (dst_opt, fn, params) -> (
         let rec aux params acc ctx =
           match params with
           | [] -> (List.rev acc, ctx)
@@ -380,7 +380,11 @@ let rec instruction_selection (program : Ir.fn list) : fn list =
         in
         let param_values, ctx = aux params [] ctx in
         let param_insts = select_reg_call param_values in
-        (param_insts @ [ Call fn ], ctx)
+        match dst_opt with
+        | None -> (param_insts @ [ Call fn ], ctx)
+        | Some dst ->
+            let vreg, ctx = select_tmp dst ctx in
+            (param_insts @ [ Call fn; Mov (vreg, Reg Rax) ], ctx))
   and select_terminator (t : Ir.terminator) (ctx : Context.t) :
       instruction list * Context.t =
     match t with
