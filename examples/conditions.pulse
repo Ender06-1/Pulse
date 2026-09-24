@@ -2,10 +2,12 @@
 # 69
 # 67
 
-var a = 1;
-if a {
-  print 69;
-} else {
-  print 420;
+fn main(): void {
+  var a = 1;
+  if a {
+    print 69;
+  } else {
+    print 420;
+  }
+  print 67;
 }
-print 67;

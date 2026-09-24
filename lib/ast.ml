@@ -15,6 +15,7 @@ and expr_kind =
   | Integer of int64
   | BinExpr of bin_op * expr * expr
   | Var of string
+  | Call of string * expr list
 
 and expr = {
   kind : expr_kind;
@@ -29,167 +30,89 @@ and stmt_kind =
   | Assign of string * expr
   | Break
   | Continue
+  | Return of expr option
+  | Expr of expr
 
 and stmt = {
   kind : stmt_kind;
   loc : Location.t;
 }
 
-and t = stmt list
+and fn_def = {
+  name : string;
+  params : string list;
+  body : stmt list;
+  ret_type : string;
+  loc : Location.t;
+}
 
-let rec string_of_binop (b : bin_op) : string =
-  match b with
-  | Plus -> "+"
-  | Minus -> "-"
-  | Mul -> "*"
-  | Div -> "/"
-  | Mod -> "%"
-  | Eq -> "=="
-  | Neq -> "!="
-  | Gt -> ">"
-  | Lt -> "<"
-  | Ge -> ">="
-  | Le -> "<="
+and t = fn_def list
 
-and string_of_expr_kind (e : expr_kind) : string =
+let rec pp_binop (fmt : Format.formatter) (b : bin_op) : unit =
+  let binop_str =
+    match b with
+    | Plus -> "+"
+    | Minus -> "-"
+    | Mul -> "*"
+    | Div -> "/"
+    | Mod -> "%"
+    | Eq -> "=="
+    | Neq -> "!="
+    | Gt -> ">"
+    | Lt -> "<"
+    | Ge -> ">="
+    | Le -> "<="
+  in
+  Format.pp_print_string fmt binop_str
+
+and pp_expr (fmt : Format.formatter) (e : expr) : unit = pp_expr_kind fmt e.kind
+
+and pp_expr_kind (fmt : Format.formatter) (e : expr_kind) : unit =
   match e with
-  | Integer i -> Int64.to_string i
-  | Var v -> v
+  | Integer i -> Format.fprintf fmt "%Ld" i
+  | Var v -> Format.pp_print_string fmt v
   | BinExpr (op, l, r) ->
-      let ls = string_of_expr_kind l.kind
-      and rs = string_of_expr_kind r.kind
-      and ops = string_of_binop op in
-      Printf.sprintf "(BinExpr (%s %s %s))" ops ls rs
+      Format.fprintf fmt "@[<hv 2>(BinExpr@ %a@ %a@ %a)@]" pp_binop op pp_expr l
+        pp_expr r
+  | Call (f, params) ->
+      Format.fprintf fmt "@[<hv 2>(Call %s@ %a)@]" f
+        Format.(pp_print_list ~pp_sep:pp_print_space pp_expr)
+        params
 
-and string_of_stmt_kind (s : stmt_kind) : string =
+and pp_stmt (fmt : Format.formatter) (s : stmt) : unit = pp_stmt_kind fmt s.kind
+
+and pp_stmt_list (fmt : Format.formatter) (stmts : stmt list) : unit =
+  Format.(pp_print_list ~pp_sep:pp_print_cut pp_stmt fmt stmts)
+
+and pp_block (fmt : Format.formatter) (stmts : stmt list) : unit =
+  Format.fprintf fmt "@[<v 2>(%a)@]" pp_stmt_list stmts
+
+and pp_stmt_kind (fmt : Format.formatter) (s : stmt_kind) : unit =
   match s with
-  | Print e ->
-      let exps = string_of_expr_kind e.kind in
-      Printf.sprintf "(Print %s)" exps
+  | Print e -> Format.fprintf fmt "@[<hv 2>(Print@ %a)@]" pp_expr e
   | VarDecl (v, e) ->
-      let exps = string_of_expr_kind e.kind in
-      Printf.sprintf "(VarDecl (%s, %s))" v exps
+      Format.fprintf fmt "@[<hv 2>(VarDecl@ %s@ %a)@]" v pp_expr e
   | If (cond, then_block, else_block_opt) ->
-      let conds = string_of_expr_kind cond.kind
-      and thes =
-        List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) then_block
-        |> String.concat " "
-      and elss =
-        Option.map
-          (List.map (fun (s : stmt) -> string_of_stmt_kind s.kind))
-          else_block_opt
-        |> Option.fold ~none:"" ~some:(String.concat " ")
-      in
-      Printf.sprintf "(If (%s (%s) (%s)))" conds thes elss
+      let else_block = Option.value else_block_opt ~default:[] in
+      Format.fprintf fmt "@[<v 2>(If %a@,%a@,%a)@]" pp_expr cond pp_block
+        then_block pp_block else_block
   | For (cond, body) ->
-      let cond_str = string_of_expr_kind cond.kind
-      and body_str =
-        List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) body
-        |> String.concat " "
-      in
-      Printf.sprintf "(For (%s %s))" cond_str body_str
-  | Assign (i, e) ->
-      let e_str = string_of_expr_kind e.kind in
-      Printf.sprintf "(Assign (%s %s))" i e_str
-  | Break -> "(Break)"
-  | Continue -> "(Continue)"
+      Format.fprintf fmt "@[<v 2>(For %a@,%a)@]" pp_expr cond pp_block body
+  | Assign (i, e) -> Format.fprintf fmt "@[<hv 2>(Assign@ %s@ %a)@]" i pp_expr e
+  | Break -> Format.pp_print_string fmt "(Break)"
+  | Continue -> Format.pp_print_string fmt "(Continue)"
+  | Return None -> Format.pp_print_string fmt "(Return)"
+  | Return (Some e) -> Format.fprintf fmt "@[<hv 2>(Return@ %a)@]" pp_expr e
+  | Expr e -> Format.fprintf fmt "@[<hv 2>(Expr@ %a)@]" pp_expr e
 
-and to_string (tree : t) : string =
-  List.map (fun (s : stmt) -> string_of_stmt_kind s.kind) tree
-  |> String.concat "\n"
+and pp_fn_def (fmt : Format.formatter) (f : fn_def) : unit =
+  Format.fprintf fmt "@[<v 2>(Fn %s (%a) %s@,%a)@]" f.name
+    Format.(pp_print_list ~pp_sep:pp_print_space pp_print_string)
+    f.params f.ret_type pp_block f.body
 
-module CheckVar = struct
-  module Context = struct
-    module StringSet = Set.Make (String)
+and pp (fmt : Format.formatter) (tree : t) : unit =
+  Format.fprintf fmt "@[<v>%a@]"
+    Format.(pp_print_list ~pp_sep:pp_print_cut pp_fn_def)
+    tree
 
-    type t = { var_scopes : StringSet.t list }
-
-    let empty : t = { var_scopes = [ StringSet.empty ] }
-
-    let is_var_defined (name : string) (ctx : t) : bool =
-      let rec aux scopes =
-        match scopes with
-        | [] -> false
-        | s :: tl -> if StringSet.mem name s then true else aux tl
-      in
-      aux ctx.var_scopes
-
-    and push_scope (ctx : t) : t =
-      { var_scopes = StringSet.empty :: ctx.var_scopes }
-
-    and pop_scope (ctx : t) : t =
-      assert (List.length ctx.var_scopes > 0);
-      { var_scopes = List.tl ctx.var_scopes }
-
-    and add_var (name : string) (ctx : t) : t =
-      assert (List.length ctx.var_scopes > 0);
-      let s = List.hd ctx.var_scopes and tl = List.tl ctx.var_scopes in
-      { var_scopes = StringSet.add name s :: tl }
-  end
-
-  let ( let* ) = Result.bind
-
-  let check (tree : t) : (unit, Report.t) result =
-    let rec check_var_expr (exp : expr) (ctx : Context.t) :
-        (unit, Report.t) result =
-      match exp.kind with
-      | Integer _ -> Ok ()
-      | Var v ->
-          if Context.is_var_defined v ctx then Ok ()
-          else
-            let msg = Printf.sprintf "unbound variable '%s'" v in
-            let report = Report.make exp.loc msg in
-            Error report
-      | BinExpr (_, l, r) ->
-          let* _ = check_var_expr l ctx in
-          check_var_expr r ctx
-    and check_var_stmt_list (stmts : stmt list) (ctx : Context.t) :
-        (unit * Context.t, Report.t) result =
-      let rec aux stmts ctx =
-        match stmts with
-        | [] -> Ok ((), ctx)
-        | s :: tl ->
-            let* _, ctx = check_var_stmt s ctx in
-            aux tl ctx
-      in
-      aux stmts ctx
-    and check_var_stmt (stmt : stmt) (ctx : Context.t) :
-        (unit * Context.t, Report.t) result =
-      match stmt.kind with
-      | Print e ->
-          let* _ = check_var_expr e ctx in
-          Ok ((), ctx)
-      | VarDecl (v, e) ->
-          let ctx = Context.add_var v ctx in
-          let* _ = check_var_expr e ctx in
-          Ok ((), ctx)
-      | If (cond, then_block, else_block_opt) -> (
-          let* _ = check_var_expr cond ctx in
-          let ctx = Context.push_scope ctx in
-          let* _, ctx = check_var_stmt_list then_block ctx in
-          let ctx = Context.pop_scope ctx in
-          match else_block_opt with
-          | Some else_block ->
-              let ctx = Context.push_scope ctx in
-              let* _, ctx = check_var_stmt_list else_block ctx in
-              let ctx = Context.pop_scope ctx in
-              Ok ((), ctx)
-          | None -> Ok ((), ctx))
-      | For (cond, body) ->
-          let* _ = check_var_expr cond ctx in
-          let ctx = Context.push_scope ctx in
-          let* _, ctx = check_var_stmt_list body ctx in
-          let ctx = Context.pop_scope ctx in
-          Ok ((), ctx)
-      | Assign (i, e) ->
-          let* _ = check_var_expr e ctx in
-          if Context.is_var_defined i ctx then Ok ((), ctx)
-          else
-            let msg = Printf.sprintf "unbound variable '%s'" i in
-            let report = Report.make stmt.loc msg in
-            Error report
-      | Break | Continue -> Ok ((), ctx)
-    in
-    let* _ = check_var_stmt_list tree Context.empty in
-    Ok ()
-end
+and to_string (tree : t) : string = Format.asprintf "%a" pp tree

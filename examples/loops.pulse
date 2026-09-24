@@ -1,20 +1,22 @@
-var n = 0;
-for n < 10 {
-  if n == 4 {
-    break;
-  }
+fn main(): void {
+  var n = 0;
+  for n < 10 {
+    if n == 4 {
+      break;
+    }
 
-  print n; 
-  n = n + 1;
-}
-
-n = 0;
-for n < 10 {
-  if n == 4 {
+    print n; 
     n = n + 1;
-    continue;
   }
 
-  print n; 
-  n = n + 1;
+  n = 0;
+  for n < 10 {
+    if n == 4 {
+      n = n + 1;
+      continue;
+    }
+
+    print n; 
+    n = n + 1;
+  }
 }

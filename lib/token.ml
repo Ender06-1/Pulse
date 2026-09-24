@@ -10,6 +10,8 @@ type kind =
   | For
   | Break
   | Continue
+  | Fn
+  | Return
   (* Operators *)
   | Plus
   | Minus
@@ -25,10 +27,12 @@ type kind =
   | Le
   (* Ponctuators *)
   | SemiColon
+  | Colon
   | OBrack
   | CBrack
   | OParen
   | CParen
+  | Comma
   (* Misc *)
   | EOF
 
@@ -50,6 +54,8 @@ let rec string_of_kind k =
   | For -> "For"
   | Break -> "Break"
   | Continue -> "Continue"
+  | Fn -> "Fn"
+  | Return -> "Return"
   (* Operators *)
   | Plus -> "Plus"
   | Minus -> "Minus"
@@ -65,10 +71,12 @@ let rec string_of_kind k =
   | Le -> "LessEqual"
   (* Ponctuators *)
   | SemiColon -> "SemiColon"
+  | Colon -> "Colon"
   | OBrack -> "OBrack"
   | CBrack -> "CBrack"
   | OParen -> "OParen"
   | CParen -> "CParen"
+  | Comma -> "Comma"
   (* Misc *)
   | EOF -> "EOF"
 
@@ -85,6 +93,8 @@ and show_kind k =
   | For -> "for"
   | Break -> "break"
   | Continue -> "continue"
+  | Fn -> "fn"
+  | Return -> "return"
   (* Operators *)
   | Plus -> "+"
   | Minus -> "-"
@@ -100,10 +110,12 @@ and show_kind k =
   | Le -> "<="
   (* Ponctuators *)
   | SemiColon -> ";"
+  | Colon -> ":"
   | OBrack -> "{"
   | CBrack -> "}"
   | OParen -> "("
   | CParen -> ")"
+  | Comma -> ","
   (* Misc *)
   | EOF -> "EOF"
 
@@ -111,7 +123,7 @@ and to_string (t : t) : string =
   let kind_str = string_of_kind t.kind and loc_str = Location.to_string t.loc in
   Printf.sprintf "%s{%s}" kind_str loc_str
 
-let keyword_of_string_opt (s : string) =
+let rec keyword_of_string_opt (s : string) =
   match s with
   | "print" -> Some Print
   | "var" -> Some Var
@@ -120,13 +132,15 @@ let keyword_of_string_opt (s : string) =
   | "for" -> Some For
   | "break" -> Some Break
   | "continue" -> Some Continue
+  | "fn" -> Some Fn
+  | "return" -> Some Return
   | _ -> None
 
 and equal_kind (k1 : kind) (k2 : kind) : bool =
   match (k1, k2) with
   (* Constants *)
-  | Integer x, Integer y -> x = y
-  | Ident i, Ident j -> i = j
+  | Integer _, Integer _ -> true
+  | Ident _, Ident _ -> true
   (* Keywords *)
   | Print, Print -> true
   | Var, Var -> true
@@ -135,6 +149,8 @@ and equal_kind (k1 : kind) (k2 : kind) : bool =
   | For, For -> true
   | Break, Break -> true
   | Continue, Continue -> true
+  | Fn, Fn -> true
+  | Return, Return -> true
   (* Operators *)
   | Plus, Plus -> true
   | Minus, Minus -> true
@@ -150,10 +166,18 @@ and equal_kind (k1 : kind) (k2 : kind) : bool =
   | Le, Le -> true
   (* Ponctuators *)
   | SemiColon, SemiColon -> true
+  | Colon, Colon -> true
   | OBrack, OBrack -> true
   | CBrack, CBrack -> true
   | OParen, OParen -> true
   | CParen, CParen -> true
+  | Comma, Comma -> true
   (* Misc *)
   | EOF, EOF -> true
   | _ -> false
+
+and get_ident (t : kind) : string =
+  assert (equal_kind t (Ident ""));
+  match t with
+  | Ident i -> i
+  | _ -> failwith "Token.get_ident: not an identifier"

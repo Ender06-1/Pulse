@@ -86,6 +86,7 @@ and next (lexer : t) : (Token.t * t, Report.t) result =
         | '/' -> Ok (Token.Div, lexer.loc, next_lexer)
         | '%' -> Ok (Token.Mod, lexer.loc, next_lexer)
         | ';' -> Ok (Token.SemiColon, lexer.loc, next_lexer)
+        | ':' -> Ok (Token.Colon, lexer.loc, next_lexer)
         | '!' as c -> (
             match advance next_lexer with
             | Some ('=', next_lexer) -> Ok (Token.Deq, lexer.loc, next_lexer)
@@ -101,6 +102,7 @@ and next (lexer : t) : (Token.t * t, Report.t) result =
         | '}' -> Ok (Token.CBrack, lexer.loc, next_lexer)
         | '(' -> Ok (Token.OParen, lexer.loc, next_lexer)
         | ')' -> Ok (Token.CParen, lexer.loc, next_lexer)
+        | ',' -> Ok (Token.Comma, lexer.loc, next_lexer)
         | '>' -> (
             match advance next_lexer with
             | Some ('=', next_lexer) -> Ok (Token.Ge, lexer.loc, next_lexer)

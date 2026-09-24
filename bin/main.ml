@@ -3,6 +3,7 @@ open Pulse
 type arguments = {
   dump_tokens : bool;
   dump_ast : bool;
+  dump_typed_ast : bool;
   dump_ir : bool;
   source_path : string;
 }
@@ -14,11 +15,18 @@ let rec parse_args (raw_args : string array) : arguments =
     match argv with
     | "--dump-tokens" -> { args with dump_tokens = true }
     | "--dump-ast" -> { args with dump_ast = true }
+    | "--dump-typed-ast" -> { args with dump_typed_ast = true }
     | "--dump-ir" -> { args with dump_ir = true }
     | _ -> { args with source_path = argv }
   in
   Array.fold_left aux
-    { dump_tokens = false; dump_ast = false; dump_ir = false; source_path = "" }
+    {
+      dump_tokens = false;
+      dump_ast = false;
+      dump_typed_ast = false;
+      dump_ir = false;
+      source_path = "";
+    }
     raw_args
 
 and lex_all (lexer : Lexer.t) : (Token.t list, Report.t) result =
@@ -37,7 +45,13 @@ and dump_tokens (lexer : Lexer.t) : (int, Report.t) result =
   Ok 0
 
 and dump_ast (program : Ast.t) : unit = Ast.to_string program |> print_endline
-and dump_ir (cfg : Ir.cfg) : unit = Ir.string_of_cfg cfg |> print_endline
+
+and dump_typed_ast (program : Typed_ast.t) : unit =
+  Typed_ast.to_string program |> print_endline
+
+and dump_ir (program : Ir.fn list) : unit =
+  Ir.string_of_fn_list program |> print_endline
+
 and dump_inst_select (program : string) : unit = print_endline program
 
 and exec_pipeline (args : arguments) : (int, Report.t) result =
@@ -45,29 +59,33 @@ and exec_pipeline (args : arguments) : (int, Report.t) result =
   let lexer = Lexer.make input args.source_path in
   if args.dump_tokens then dump_tokens lexer
   else
-    let* program = Parser.parse_program lexer in
-    let* _ = Ast.CheckVar.check program in
+    let* ast = Parser.parse_program lexer in
     if args.dump_ast then (
-      dump_ast program;
+      dump_ast ast;
       Ok 0)
     else
-      let* cfg = Ir.flatten program in
-      if args.dump_ir then (
-        dump_ir cfg;
+      let* program = Typed_ast.typecheck ast in
+      if args.dump_typed_ast then (
+        dump_typed_ast program;
         Ok 0)
       else
-        let asm = Codegen_x86_64_linux.codegen cfg in
-        let base_name = Filename.remove_extension args.source_path in
-        let asm_name = Printf.sprintf "%s.asm" base_name
-        and obj_name = Printf.sprintf "%s.o" base_name in
-        Out_channel.with_open_text asm_name (fun c ->
-            Out_channel.output_string c asm);
-        let cmd =
-          Printf.sprintf "nasm -felf64 %s && ld %s -o %s" asm_name obj_name
-            base_name
-        in
-        let ret_code = Sys.command cmd in
-        Ok ret_code
+        let* cfg = Ir.flatten program in
+        if args.dump_ir then (
+          dump_ir cfg;
+          Ok 0)
+        else
+          let asm = Codegen_x86_64_linux.codegen cfg in
+          let base_name = Filename.remove_extension args.source_path in
+          let asm_name = Printf.sprintf "%s.asm" base_name
+          and obj_name = Printf.sprintf "%s.o" base_name in
+          Out_channel.with_open_text asm_name (fun c ->
+              Out_channel.output_string c asm);
+          let cmd =
+            Printf.sprintf "nasm -felf64 %s && ld %s -o %s" asm_name obj_name
+              base_name
+          in
+          let ret_code = Sys.command cmd in
+          Ok ret_code
 
 let () =
   let args = parse_args Sys.argv in
