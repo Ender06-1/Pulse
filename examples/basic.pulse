@@ -1,8 +1,0 @@
-# only prints 69
-fn main(): void {
-  print 34 + 35;
-  print 100 - 31;
-  print 3 * 23;
-  print 207 / 3;
-  print 169 % 100;
-}

@@ -1,13 +1,14 @@
 type typ =
   | U64
   | Void
+  | Pointer of typ
 
 and fn_type = {
   params : (string * typ) list;
   ret_type : typ;
 }
 
-type bin_op =
+and bin_op =
   | Plus
   | Minus
   | Mul
@@ -20,14 +21,30 @@ type bin_op =
   | Ge
   | Le
 
+and una_op =
+  | Deref
+  | Addr
+
 and expr_kind =
-  | Integer of int64
-  | BinExpr of bin_op * expr * expr
-  | Var of string
+  | IntegerLiteral of int64
+  | Variable of string
+  | UnaryExpr of una_op * expr
+  | BinaryExpr of bin_op * expr * expr
   | Call of string * expr list
+  | Null
 
 and expr = {
   kind : expr_kind;
+  loc : Location.t;
+  typ : typ;
+}
+
+and lvalue_kind =
+  | Ident of string
+  | Deref of lvalue
+
+and lvalue = {
+  kind : lvalue_kind;
   loc : Location.t;
   typ : typ;
 }
@@ -37,7 +54,7 @@ and stmt_kind =
   | VarDecl of string * expr
   | If of expr * stmt list * stmt list option
   | For of expr * stmt list
-  | Assign of string * expr
+  | Assign of lvalue * expr
   | Break
   | Continue
   | Return of expr option
@@ -58,7 +75,15 @@ and fn_def = {
 and t = fn_def list
 
 let string_of_typ (t : typ) : string =
-  match t with U64 -> "u64" | Void -> "void"
+  let rec aux t acc =
+    match t with
+    | U64 -> Printf.sprintf "%su64" acc
+    | Void -> Printf.sprintf "%svoid" acc
+    | Pointer t ->
+        let acc = String.cat acc "*" in
+        aux t acc
+  in
+  aux t ""
 
 let rec pp_typ (fmt : Format.formatter) (t : typ) : unit =
   let t_str = string_of_typ t in
@@ -89,28 +114,43 @@ and pp_binop (fmt : Format.formatter) (b : bin_op) : unit =
   in
   Format.pp_print_string fmt binop_str
 
+and pp_unaryop (fmt : Format.formatter) (u : una_op) : unit =
+  let unop_str = match u with Deref -> "*" | Addr -> "&" in
+  Format.pp_print_string fmt unop_str
+
 and pp_expr (fmt : Format.formatter) (e : expr) : unit =
   Format.fprintf fmt "%a{%a}" pp_expr_kind e.kind pp_typ e.typ
 
 and pp_expr_kind (fmt : Format.formatter) (e : expr_kind) : unit =
   match e with
-  | Integer i -> Format.fprintf fmt "%Ld" i
-  | Var v -> Format.pp_print_string fmt v
-  | BinExpr (op, l, r) ->
-      Format.fprintf fmt "@[<hv 2>(BinExpr@ %a@ %a@ %a)@]" pp_binop op pp_expr l
-        pp_expr r
+  | IntegerLiteral i -> Format.fprintf fmt "%Ld" i
+  | Variable v -> Format.pp_print_string fmt v
+  | UnaryExpr (op, e) ->
+      Format.fprintf fmt "@[<hv 2>(UnaryExpr@ %a@ %a)@]" pp_unaryop op pp_expr e
+  | BinaryExpr (op, l, r) ->
+      Format.fprintf fmt "@[<hv 2>(BinaryExpr@ %a@ %a@ %a)@]" pp_binop op
+        pp_expr l pp_expr r
   | Call (f, params) ->
       Format.fprintf fmt "@[<hv 2>(Call %s@ %a)@]" f
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space pp_expr)
+        Format.(pp_print_list ~pp_sep:pp_print_space pp_expr)
         params
+  | Null -> Format.pp_print_string fmt "null"
 
-and pp_stmt (fmt : Format.formatter) (s : stmt) : unit = pp_stmt_kind fmt s.kind
+and pp_lvalue_kind (fmt : Format.formatter) (lv : lvalue_kind) : unit =
+  match lv with
+  | Ident i -> Format.fprintf fmt "@[(LValue@ %s)@]" i
+  | Deref d -> Format.fprintf fmt "@[(LValue@ *%a)@]" pp_lvalue d
+
+and pp_lvalue (fmt : Format.formatter) (lv : lvalue) : unit =
+  Format.fprintf fmt "%a{%a}" pp_lvalue_kind lv.kind pp_typ lv.typ
 
 and pp_stmt_list (fmt : Format.formatter) (stmts : stmt list) : unit =
   Format.pp_print_list ~pp_sep:Format.pp_print_cut pp_stmt fmt stmts
 
 and pp_block (fmt : Format.formatter) (stmts : stmt list) : unit =
   Format.fprintf fmt "@[<v 2>(%a)@]" pp_stmt_list stmts
+
+and pp_stmt (fmt : Format.formatter) (s : stmt) : unit = pp_stmt_kind fmt s.kind
 
 and pp_stmt_kind (fmt : Format.formatter) (s : stmt_kind) : unit =
   match s with
@@ -123,7 +163,8 @@ and pp_stmt_kind (fmt : Format.formatter) (s : stmt_kind) : unit =
         then_block pp_block else_block
   | For (cond, body) ->
       Format.fprintf fmt "@[<v 2>(For %a@,%a)@]" pp_expr cond pp_block body
-  | Assign (i, e) -> Format.fprintf fmt "@[<hv 2>(Assign@ %s@ %a)@]" i pp_expr e
+  | Assign (lv, e) ->
+      Format.fprintf fmt "@[<hv 2>(Assign@ %a@ %a)@]" pp_lvalue lv pp_expr e
   | Break -> Format.pp_print_string fmt "(Break)"
   | Continue -> Format.pp_print_string fmt "(Continue)"
   | Return None -> Format.pp_print_string fmt "(Return)"
@@ -156,6 +197,9 @@ let to_binop (b : Ast.bin_op) : bin_op =
   | Ast.Lt -> Lt
   | Ast.Ge -> Ge
   | Ast.Le -> Le
+
+and to_unaop (u : Ast.una_op) : una_op =
+  match u with Ast.Deref -> Deref | Ast.Addr -> Addr
 
 module Context = struct
   type t = {
@@ -216,24 +260,37 @@ end
 
 let ( let* ) = Result.bind
 
-let rec is_compatible (t_expected : typ) (t_actual : typ) : bool =
-  match (t_expected, t_actual) with
-  | U64, U64 -> true
-  | Void, Void -> true
-  | _ -> false
-
-and expect (t_expected : typ) (t_actual : typ) (l : Location.t) :
-    (typ, Report.t) result =
-  if is_compatible t_expected t_actual then Ok t_actual
-  else
-    let msg =
-      string_of_typ t_expected |> Printf.sprintf "invalid type. Expected '%s'"
-    in
-    let report = Report.make l msg in
-    Error report
-
 let typecheck (ast : Ast.t) : (t, Report.t) result =
-  let rec typecheck_call (e : Ast.expr) (fn : string) (params : Ast.expr list)
+  let rec is_compatible (t_expected : typ) (t_actual : typ) : bool =
+    match (t_expected, t_actual) with
+    | U64, U64 -> true
+    | Void, Void -> true
+    | Pointer t1, Pointer t2 -> is_compatible t1 t2
+    | _ -> false
+  and expect (t_expected : typ) (t_actual : typ) (l : Location.t) :
+      (typ, Report.t) result =
+    if is_compatible t_expected t_actual then Ok t_actual
+    else
+      let msg =
+        string_of_typ t_expected |> Printf.sprintf "invalid type. Expected '%s'"
+      in
+      let report = Report.make l msg in
+      Error report
+  and expect_pointer (t_actual : typ) (l : Location.t) : (typ, Report.t) result
+      =
+    match t_actual with
+    | Pointer _ -> Ok t_actual
+    | _ ->
+        let msg = "invalid type. Expected pointer" in
+        let report = Report.make l msg in
+        Error report
+  and is_variable (e : expr) : bool =
+    match e.kind with Variable _ -> true | _ -> false
+  and deref_pointer (t : typ) : typ =
+    match t with
+    | Pointer p -> p
+    | _ -> failwith "deref_pointer: type is not a pointer"
+  and typecheck_call (c : Ast.expr) (fn : string) (params : Ast.expr list)
       (ctx : Context.t) : (expr, Report.t) result =
     let rec typecheck_params params ctx =
       let rec aux params acc =
@@ -248,7 +305,7 @@ let typecheck (ast : Ast.t) : (t, Report.t) result =
     match Context.get_fn_opt fn ctx with
     | None ->
         let msg = Printf.sprintf "undefined function '%s'" fn in
-        let report = Report.make e.loc msg in
+        let report = Report.make c.loc msg in
         Error report
     | Some fn_type ->
         let* params, ctx = typecheck_params params ctx in
@@ -256,10 +313,10 @@ let typecheck (ast : Ast.t) : (t, Report.t) result =
           match (fn_params, exp_params) with
           | [], [] -> Ok ()
           | [], _ ->
-              let report = Report.make e.loc "too many parameters in call" in
+              let report = Report.make c.loc "too many parameters in call" in
               Error report
           | _, [] ->
-              let report = Report.make e.loc "not enough parameters in call" in
+              let report = Report.make c.loc "not enough parameters in call" in
               Error report
           | (_, fp) :: ftl, ep :: etl ->
               let* _ = expect fp ep.typ ep.loc in
@@ -267,34 +324,80 @@ let typecheck (ast : Ast.t) : (t, Report.t) result =
         in
         let* _ = aux fn_type.params params in
         let e : expr =
-          { kind = Call (fn, params); loc = e.loc; typ = fn_type.ret_type }
+          { kind = Call (fn, params); loc = c.loc; typ = fn_type.ret_type }
         in
         Ok e
   and typecheck_expr (e : Ast.expr) (ctx : Context.t) : (expr, Report.t) result
       =
     match e.kind with
-    | Integer i ->
-        let e : expr = { kind = Integer i; loc = e.loc; typ = U64 } in
+    | IntegerLiteral i ->
+        let e : expr = { kind = IntegerLiteral i; loc = e.loc; typ = U64 } in
         Ok e
-    | Var v -> (
+    | Variable v -> (
         match Context.get_var_opt v ctx with
         | None ->
             let msg = Printf.sprintf "undefined variable '%s'" v in
             let report = Report.make e.loc msg in
             Error report
         | Some typ ->
-            let e : expr = { kind = Var v; loc = e.loc; typ } in
+            let e : expr = { kind = Variable v; loc = e.loc; typ } in
             Ok e)
     | Call (fn, params) -> typecheck_call e fn params ctx
-    | BinExpr (op, l, r) ->
+    | UnaryExpr (op, e_new) -> (
+        let* e_new = typecheck_expr e_new ctx in
+        let op = to_unaop op in
+        match op with
+        | Deref ->
+            let* _ = expect_pointer e_new.typ e.loc in
+            let sub_typ = deref_pointer e_new.typ in
+            let e_una : expr =
+              { kind = UnaryExpr (op, e_new); loc = e.loc; typ = sub_typ }
+            in
+            Ok e_una
+        | Addr ->
+            if is_variable e_new then
+              let e_una : expr =
+                {
+                  kind = UnaryExpr (op, e_new);
+                  loc = e.loc;
+                  typ = Pointer e_new.typ;
+                }
+              in
+              Ok e_una
+            else
+              let msg = "cannot take address of non-variable" in
+              let report = Report.make e.loc msg in
+              Error report)
+    | BinaryExpr (op, l, r) ->
         let* l = typecheck_expr l ctx in
         let* r = typecheck_expr r ctx in
         let* _ = expect U64 l.typ l.loc in
         let* _ = expect U64 r.typ r.loc in
         let e : expr =
-          { kind = BinExpr (to_binop op, l, r); loc = e.loc; typ = U64 }
+          { kind = BinaryExpr (to_binop op, l, r); loc = e.loc; typ = U64 }
         in
         Ok e
+    | Null ->
+        let e : expr = { kind = Null; loc = e.loc; typ = Pointer Void } in
+        Ok e
+  and typecheck_lvalue (lv : Ast.lvalue) (ctx : Context.t) :
+      (lvalue, Report.t) result =
+    match lv.kind with
+    | Ident i -> (
+        match Context.get_var_opt i ctx with
+        | Some t ->
+            let l : lvalue = { kind = Ident i; loc = lv.loc; typ = t } in
+            Ok l
+        | None ->
+            let msg = Printf.sprintf "undefined variable '%s'" i in
+            let report = Report.make lv.loc msg in
+            Error report)
+    | Deref d ->
+        let* sub_lv = typecheck_lvalue d ctx in
+        let l : lvalue =
+          { kind = Deref sub_lv; loc = lv.loc; typ = deref_pointer sub_lv.typ }
+        in
+        Ok l
   and typecheck_stmt (s : Ast.stmt) (ctx : Context.t) :
       (stmt * Context.t, Report.t) result =
     match s.kind with
@@ -336,18 +439,11 @@ let typecheck (ast : Ast.t) : (t, Report.t) result =
         let ctx = Context.pop_var_scope ctx in
         let s : stmt = { kind = For (cond, body); loc = s.loc } in
         Ok (s, ctx)
-    | Assign (v, e) ->
+    | Assign (lv, e) ->
+        let* lv = typecheck_lvalue lv ctx in
         let* e = typecheck_expr e ctx in
-        let* v_type =
-          match Context.get_var_opt v ctx with
-          | Some t -> Ok t
-          | None ->
-              let msg = Printf.sprintf "undefined variable '%s'" v in
-              let report = Report.make s.loc msg in
-              Error report
-        in
-        let* _ = expect v_type e.typ e.loc in
-        let s : stmt = { kind = Assign (v, e); loc = s.loc } in
+        let* _ = expect lv.typ e.typ e.loc in
+        let s : stmt = { kind = Assign (lv, e); loc = s.loc } in
         Ok (s, ctx)
     | Break ->
         let s : stmt = { kind = Break; loc = s.loc } in
@@ -382,18 +478,31 @@ let typecheck (ast : Ast.t) : (t, Report.t) result =
           aux tl (stmt :: acc) ctx
     in
     aux sl [] ctx
+  and typecheck_type_str (t : Ast.type_str) (l : Location.t) :
+      (typ, Report.t) result =
+    match t with
+    | Name "u64" -> Ok U64
+    | Name "void" -> Ok Void
+    | Pointer p ->
+        let* t = typecheck_type_str p l in
+        Ok (Pointer t)
+    | Name n ->
+        let msg = Printf.sprintf "unknown type '%s'" n in
+        let report = Report.make l msg in
+        Error report
   and typecheck_fn_decl (fn : Ast.fn_def) (ctx : Context.t) :
       (Context.t, Report.t) result =
-    let* ret_type =
-      match fn.ret_type with
-      | "u64" -> Ok U64
-      | "void" -> Ok Void
-      | _ ->
-          let msg = Printf.sprintf "unknown type '%s'" fn.ret_type in
-          let report = Report.make fn.loc msg in
-          Error report
+    let* ret_type = typecheck_type_str fn.ret_type fn.loc in
+    let* params =
+      let rec aux params acc =
+        match params with
+        | [] -> Ok (List.rev acc)
+        | (p, t) :: tl ->
+            let* t = typecheck_type_str t fn.loc in
+            aux tl ((p, t) :: acc)
+      in
+      aux fn.params []
     in
-    let params = List.map (fun p -> (p, U64)) fn.params in
     let fn_type : fn_type = { params; ret_type } in
     let ctx = Context.add_fn fn.name fn_type ctx in
     let ctx = if fn.name = "main" then Context.set_main_defined ctx else ctx in

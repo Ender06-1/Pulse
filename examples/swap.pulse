@@ -1,0 +1,16 @@
+fn swap(a *u64, b *u64): void {
+  var t = *a;
+  *a = *b;
+  *b = t;
+}
+
+fn main(): void {
+  var a = 69;
+  var b = 420;
+  print a;
+  print b;
+
+  swap(&a, &b);
+  print a;
+  print b;
+}

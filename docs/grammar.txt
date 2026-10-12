@@ -3,7 +3,15 @@ program =
   ;
 
 fun_def =
-  | "fn" ident "(" ( ident ( "," ident )* )? ")" ":" ident stmt_block
+  | "fn" ident "(" ( arg ( "," arg )* )? ")" ":" type_ref stmt_block
+  ;
+
+arg =
+  | ident ":" type_ref
+  ;
+
+type_ref =
+  | "*"? ident
   ;
 
 stmt =
@@ -11,7 +19,7 @@ stmt =
   | "var" ident "=" expr ";"
   | "if" expr stmt_block ( "else" stmt_block )?
   | "for" expr stmt_block
-  | ident "=" expr ";"
+  | lvalue "=" expr ";"
   | "break" ";"
   | "continue" ";"
   | "return" expr? ";"
@@ -20,6 +28,11 @@ stmt =
 
 stmt_block =
   | "{" stmt+ "}"
+  ;
+
+lvalue =
+  | ident
+  | "*" ident
   ;
 
 expr =
@@ -39,11 +52,16 @@ add_expr =
   ;
 
 mul_expr =
-  | prim_expr ( ( "*" | "/" | "%" ) prim_expr )*
+  | unary_expr ( ( "*" | "/" | "%" ) unary_expr )*
+  ;
+
+unary_expr =
+  | ( "*" | "&" )? prim_expr
   ;
 
 prim_expr =
-  | integer
+  | integer_lit
+  | "null"
   | ident ( "(" ( expr ( "," expr )* )? ")" )?
   | "(" expr ")"
   ;

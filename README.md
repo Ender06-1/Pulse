@@ -19,9 +19,10 @@ OPTIONS:
 - u64 gt, lt, ge, le, equality and inequality comparisons
 - variables
 - if/else conditions (then branch on cond != 0)
-- conditional loops (for ... {...}), with break and continue
-- functions
+- conditional loops (for (exp != 0) {...}), with break and continue
+- functions, with return values (only u64 or empty, typed in the function definition)
 - typed expressions (u64, void)
+- meaningful compilation errors with file path and line/column positions
 
 ## TODO
 

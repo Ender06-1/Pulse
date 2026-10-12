@@ -17,6 +17,9 @@ and instruction =
   | Cge of int * value * value
   | Cle of int * value * value
   | Call of int option * string * value list
+  | Store of int * value
+  | Load of int * int
+  | Alloc of int
 
 and terminator =
   | Jmp of int
@@ -114,6 +117,15 @@ and string_of_instruction (i : instruction) : string =
       | Some t ->
           let t_str = string_of_tmp t in
           Printf.sprintf "%s = call %s(%s)" t_str fn param_str)
+  | Store (t, v) ->
+      let t_str = string_of_tmp t and v_str = string_of_value v in
+      Printf.sprintf "store %s, %s" v_str t_str
+  | Load (dst, src) ->
+      let dst_str = string_of_tmp dst and src_str = string_of_tmp src in
+      Printf.sprintf "%s = load %s" dst_str src_str
+  | Alloc dst ->
+      let dst_str = string_of_tmp dst in
+      Printf.sprintf "%s = alloc" dst_str
 
 and string_of_terminator (t : terminator) : string =
   match t with
@@ -236,11 +248,16 @@ and cfg_make_block (label : int) : block =
 let rec flatten_expr (exp : Typed_ast.expr) (cur_block : block)
     (ctx : Context.t) : value * block * Context.t =
   match exp.kind with
-  | Typed_ast.Integer i -> (Integer i, cur_block, ctx)
-  | Typed_ast.Var v ->
+  | Typed_ast.IntegerLiteral i -> (Integer i, cur_block, ctx)
+  | Typed_ast.Variable v ->
       let t = Context.get_var_tmp v ctx in
       (Temp t, cur_block, ctx)
-  | Typed_ast.BinExpr (op, lhs, rhs) -> (
+  | Typed_ast.UnaryExpr (op, e) -> (
+      let eval, cur_block, ctx = flatten_expr e cur_block ctx in
+      match op with
+      | Deref -> failwith "not implemented"
+      | Addr -> failwith "not implemented")
+  | Typed_ast.BinaryExpr (op, lhs, rhs) -> (
       let lval, cur_block, ctx = flatten_expr lhs cur_block ctx in
       let rval, cur_block, ctx = flatten_expr rhs cur_block ctx in
       let t, ctx = Context.gen_tmp ctx in
@@ -283,7 +300,9 @@ let rec flatten_expr (exp : Typed_ast.expr) (cur_block : block)
       | Typed_ast.U64 ->
           (t_val, cfg_add_insts [ Call (Some t, fn, params) ] cur_block, ctx)
       | Typed_ast.Void ->
-          (t_val, cfg_add_insts [ Call (None, fn, params) ] cur_block, ctx))
+          (t_val, cfg_add_insts [ Call (None, fn, params) ] cur_block, ctx)
+      | _ -> failwith "not implemented")
+  | Typed_ast.Null -> failwith "not implemented"
 
 and flatten_stmt_list (stmts : Typed_ast.stmt list) (cur_block : block)
     (cfg : block list) (ctx : Context.t) :
